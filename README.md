@@ -2,6 +2,8 @@
 `go-didplc`: Go implementation of DID PLC method
 ================================================
 
+**NOTE:** this codebase is work-in-progress: has not been reviewed and will have rapid API breaking changes.
+
 DID PLC is a self-authenticating [DID](https://www.w3.org/TR/did-core/) which is strongly-consistent, recoverable, and allows for key rotation. See <https://web.plc.directory> for details.
 
 ## License
