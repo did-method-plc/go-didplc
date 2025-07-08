@@ -48,6 +48,22 @@ func TestLogEntryValidate(t *testing.T) {
 	}
 }
 
+func TestLogEntryInvalid(t *testing.T) {
+	assert := assert.New(t)
+
+	list := []string{
+		"testdata/log_invalid_sig_b64_padding_chars.json",
+		"testdata/log_invalid_sig_b64_padding_bits.json",
+		"testdata/log_invalid_sig_b64_newline.json",
+	}
+	for _, p := range list {
+		entries := loadTestLogEntries(t, p)
+		for _, le := range entries {
+			assert.Error(le.Validate())
+		}
+	}
+}
+
 func TestCreatePLC(t *testing.T) {
 	assert := assert.New(t)
 
