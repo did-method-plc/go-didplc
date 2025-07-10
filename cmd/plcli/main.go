@@ -10,7 +10,7 @@ import (
 
 	"github.com/bluesky-social/indigo/atproto/crypto"
 	"github.com/bluesky-social/indigo/atproto/syntax"
-	"tangled.sh/bnewbold.net/cobalt/didplc"
+	"github.com/did-method-plc/go-didplc"
 
 	"github.com/urfave/cli/v2"
 )
