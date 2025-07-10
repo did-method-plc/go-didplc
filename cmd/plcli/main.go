@@ -142,7 +142,7 @@ func runSubmit(cctx *cli.Context) error {
 	op := enum.AsOperation()
 
 	s := cctx.Args().First()
-	var did_string string = ""
+	var did_string string
 	if s == "" {
 		if !op.IsGenesis() {
 			fmt.Println("a DID must be provided as argument for non-genesis ops")

@@ -102,7 +102,15 @@ func (c *Client) Submit(ctx context.Context, did string, op Operation) error {
 		return ErrDIDNotFound
 	}
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed did:plc operation submission, HTTP status: %d", resp.StatusCode)
+		var body_str string
+		body := new(strings.Builder)
+		_, err := io.Copy(body, resp.Body)
+		if err != nil {
+			body_str = "<failed to read response body>"
+		} else {
+			body_str = body.String()
+		}
+		return fmt.Errorf("failed did:plc operation submission, HTTP status: %d\n%s", resp.StatusCode, body_str)
 	}
 
 	return nil
