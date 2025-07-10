@@ -10,7 +10,6 @@ require (
 	github.com/ipfs/go-ipld-cbor v0.2.1
 	github.com/stretchr/testify v1.10.0
 	github.com/urfave/cli/v2 v2.27.7
-	tangled.sh/bnewbold.net/cobalt v0.0.0-20250704031305-0ca140bba65e
 )
 
 require (

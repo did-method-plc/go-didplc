@@ -85,5 +85,3 @@ gopkg.in/yaml.v3 v3.0.1 h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=
 gopkg.in/yaml.v3 v3.0.1/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
 lukechampine.com/blake3 v1.4.1 h1:I3Smz7gso8w4/TunLKec6K2fn+kyKtDxr/xcQEN84Wg=
 lukechampine.com/blake3 v1.4.1/go.mod h1:QFosUxmjB8mnrWFSNwKmvxHpfY72bmD2tQ0kBMM3kwo=
-tangled.sh/bnewbold.net/cobalt v0.0.0-20250704031305-0ca140bba65e h1:NNCJXWg8GQcfNwl2d3GA75BFLCSjU4pq8IANFshX2Jk=
-tangled.sh/bnewbold.net/cobalt v0.0.0-20250704031305-0ca140bba65e/go.mod h1:YOpKd7fcKzuDiMq9u9bYEtEcsRWxIO07nDRQ46f2ycQ=
