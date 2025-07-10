@@ -10,7 +10,7 @@ help: ## Print info about all commands
 
 .PHONY: build
 build: ## Build all executables
-	# TODO
+	go build ./cmd/plcli
 
 .PHONY: all
 all: build
@@ -28,6 +28,10 @@ coverage-html: ## Generate test coverage report and open in browser
 lint: ## Verify code style and run static checks
 	go vet ./...
 	test -z $(gofmt -l ./...)
+
+.PHONY: golangci-lint
+golangci-lint: ## Additional static linting
+	golangci-lint run
 
 .PHONY: fmt
 fmt: ## Run syntax re-formatting (modify in place)
