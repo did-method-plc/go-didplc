@@ -72,6 +72,23 @@ func main() {
 				},
 			},
 		},
+		&cli.Command{
+			Name:   "keygen",
+			Usage:  "generate a fresh k256 private key, printed to stdout as a multibase string",
+			Action: runKeyGen,
+		},
+		&cli.Command{
+			Name:   "derive_pubkey",
+			Usage:  "derive a public key and print to stdout in did:key format",
+			Action: runDerivePubkey,
+			Flags: []cli.Flag{
+				&cli.StringFlag{
+					Name:    "plc-private-rotation-key",
+					Usage:   "private key used as input (multibase syntax)",
+					EnvVars: []string{"PLC_PRIVATE_ROTATION_KEY"},
+				},
+			},
+		},
 	}
 	h := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})
 	slog.SetDefault(slog.New(h))
@@ -133,6 +150,7 @@ func runSubmit(cctx *cli.Context) error {
 		}
 		// else, did string will be computed after signing
 	} else {
+		// it's already a string, but we round-trip it to make sure it's well-formed
 		parsed_did, err := syntax.ParseDID(s)
 		if err != nil {
 			return err
@@ -222,5 +240,37 @@ func runVerify(cctx *cli.Context) error {
 	}
 
 	fmt.Println("valid")
+	return nil
+}
+
+func runKeyGen(cctx *cli.Context) error {
+	// TODO: support P256 also
+	privkey, err := crypto.GeneratePrivateKeyK256()
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(privkey.Multibase())
+
+	return nil
+}
+
+func runDerivePubkey(cctx *cli.Context) error {
+	privStr := cctx.String("plc-private-rotation-key")
+	if privStr == "" {
+		return fmt.Errorf("private key is required")
+	}
+	privkey, err := crypto.ParsePrivateMultibase(privStr)
+	if err != nil {
+		return err
+	}
+
+	pubkey, err := privkey.PublicKey()
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(pubkey.DIDKey())
+
 	return nil
 }
