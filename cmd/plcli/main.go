@@ -180,15 +180,12 @@ func runSubmit(cctx *cli.Context) error {
 		}
 	}
 
-	entry, err := c.Submit(ctx, did_string, op)
+	err = c.Submit(ctx, did_string, op)
 	if err != nil {
 		return err
 	}
-	jsonBytes, err := json.Marshal(&entry)
-	if err != nil {
-		return err
-	}
-	fmt.Println(string(jsonBytes))
+
+	fmt.Printf("Successfully submited operation: %s/%s\n", c.DirectoryURL, did_string)
 	return nil
 }
 

@@ -65,9 +65,9 @@ func (c *Client) Resolve(ctx context.Context, did string) (*Doc, error) {
 	return &doc, nil
 }
 
-func (c *Client) Submit(ctx context.Context, did string, op Operation) (*LogEntry, error) {
+func (c *Client) Submit(ctx context.Context, did string, op Operation) error {
 	if !strings.HasPrefix(did, "did:plc:") {
-		return nil, fmt.Errorf("expected a did:plc, got: %s", did)
+		return fmt.Errorf("expected a did:plc, got: %s", did)
 	}
 
 	plcURL := c.DirectoryURL
@@ -78,14 +78,14 @@ func (c *Client) Submit(ctx context.Context, did string, op Operation) (*LogEntr
 	var body io.Reader
 	b, err := json.Marshal(op)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	body = bytes.NewReader(b)
 
 	url := plcURL + "/" + did
 	req, err := http.NewRequestWithContext(ctx, "POST", url, body)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	if c.UserAgent != nil {
@@ -96,20 +96,16 @@ func (c *Client) Submit(ctx context.Context, did string, op Operation) (*LogEntr
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("did:plc operation submission failed: %w", err)
+		return fmt.Errorf("did:plc operation submission failed: %w", err)
 	}
 	if resp.StatusCode == http.StatusNotFound {
-		return nil, ErrDIDNotFound
+		return ErrDIDNotFound
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed did:plc operation submission, HTTP status: %d", resp.StatusCode)
+		return fmt.Errorf("failed did:plc operation submission, HTTP status: %d", resp.StatusCode)
 	}
 
-	var entry LogEntry
-	if err := json.NewDecoder(resp.Body).Decode(&entry); err != nil {
-		return nil, fmt.Errorf("failed parse of did:plc op log entry: %w", err)
-	}
-	return &entry, nil
+	return nil
 }
 
 func (c *Client) OpLog(ctx context.Context, did string, audit bool) ([]LogEntry, error) {
