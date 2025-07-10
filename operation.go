@@ -42,7 +42,8 @@ type OpService struct {
 }
 
 type RegularOp struct {
-	Type                string               `json:"type,const=plc_operation" cborgen:"type,const=plc_operation"`
+	// Type is "plc_operation"
+	Type                string               `json:"type" cborgen:"type"`
 	RotationKeys        []string             `json:"rotationKeys" cborgen:"rotationKeys"`
 	VerificationMethods map[string]string    `json:"verificationMethods" cborgen:"verificationMethods"`
 	AlsoKnownAs         []string             `json:"alsoKnownAs" cborgen:"alsoKnownAs"`
@@ -52,13 +53,15 @@ type RegularOp struct {
 }
 
 type TombstoneOp struct {
-	Type string  `json:"type,const=plc_tombstone" cborgen:"type,const=plc_tombstone"`
+	// Type is "plc_tombstone"
+	Type string  `json:"type" cborgen:"type"`
 	Prev string  `json:"prev" cborgen:"prev"`
 	Sig  *string `json:"sig,omitempty" cborgen:"sig,omitempty" refmt:"sig,omitempty"`
 }
 
 type LegacyOp struct {
-	Type        string  `json:"type,const=create" cborgen:"type,const=create"`
+	// Type is "create"
+	Type        string  `json:"type" cborgen:"type"`
 	SigningKey  string  `json:"signingKey" cborgen:"signingKey"`
 	RecoveryKey string  `json:"recoveryKey" cborgen:"recoveryKey"`
 	Handle      string  `json:"handle" cborgen:"handle"`
