@@ -15,6 +15,8 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+const PLCLI_USER_AGENT = "go-didplc/plcli"
+
 func main() {
 	app := cli.App{
 		Name:  "plcli",
@@ -111,6 +113,7 @@ func runResolve(cctx *cli.Context) error {
 
 	c := didplc.Client{
 		DirectoryURL: cctx.String("plc-host"),
+		UserAgent:    PLCLI_USER_AGENT,
 	}
 	doc, err := c.Resolve(ctx, did.String())
 	if err != nil {
@@ -129,6 +132,7 @@ func runSubmit(cctx *cli.Context) error {
 
 	c := didplc.Client{
 		DirectoryURL: cctx.String("plc-host"),
+		UserAgent:    PLCLI_USER_AGENT,
 	}
 
 	inBytes, err := io.ReadAll(os.Stdin)
@@ -203,6 +207,7 @@ func fetchOplog(cctx *cli.Context) ([]didplc.LogEntry, error) {
 
 	c := didplc.Client{
 		DirectoryURL: cctx.String("plc-host"),
+		UserAgent:    PLCLI_USER_AGENT,
 	}
 	entries, err := c.OpLog(ctx, did.String(), cctx.Bool("audit"))
 	if err != nil {

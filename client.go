@@ -16,7 +16,7 @@ import (
 // the zero-value of this client is fully functional
 type Client struct {
 	DirectoryURL string
-	UserAgent    *string
+	UserAgent    string
 	HTTPClient   http.Client
 	RotationKey  *crypto.PrivateKey
 }
@@ -41,8 +41,8 @@ func (c *Client) Resolve(ctx context.Context, did string) (*Doc, error) {
 	if err != nil {
 		return nil, err
 	}
-	if c.UserAgent != nil {
-		req.Header.Set("User-Agent", *c.UserAgent)
+	if c.UserAgent != "" {
+		req.Header.Set("User-Agent", c.UserAgent)
 	} else {
 		req.Header.Set("User-Agent", "go-did-method-plc")
 	}
@@ -88,8 +88,8 @@ func (c *Client) Submit(ctx context.Context, did string, op Operation) error {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if c.UserAgent != nil {
-		req.Header.Set("User-Agent", *c.UserAgent)
+	if c.UserAgent != "" {
+		req.Header.Set("User-Agent", c.UserAgent)
 	} else {
 		req.Header.Set("User-Agent", "go-did-method-plc")
 	}
@@ -134,8 +134,8 @@ func (c *Client) OpLog(ctx context.Context, did string, audit bool) ([]LogEntry,
 	if err != nil {
 		return nil, err
 	}
-	if c.UserAgent != nil {
-		req.Header.Set("User-Agent", *c.UserAgent)
+	if c.UserAgent != "" {
+		req.Header.Set("User-Agent", c.UserAgent)
 	} else {
 		req.Header.Set("User-Agent", "go-did-method-plc")
 	}
