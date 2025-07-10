@@ -109,16 +109,6 @@ func runResolve(cctx *cli.Context) error {
 
 func runSubmit(cctx *cli.Context) error {
 	ctx := context.Background()
-	s := cctx.Args().First()
-	if s == "" {
-		fmt.Println("need to provide DID as an argument")
-		os.Exit(-1)
-	}
-
-	did, err := syntax.ParseDID(s)
-	if err != nil {
-		return err
-	}
 
 	c := didplc.Client{
 		DirectoryURL: cctx.String("plc-host"),
@@ -134,6 +124,22 @@ func runSubmit(cctx *cli.Context) error {
 	}
 	op := enum.AsOperation()
 
+	s := cctx.Args().First()
+	var did_string string = ""
+	if s == "" {
+		if !op.IsGenesis() {
+			fmt.Println("a DID must be provided as argument for non-genesis ops")
+			os.Exit(-1)
+		}
+		// else, did string will be computed after signing
+	} else {
+		parsed_did, err := syntax.ParseDID(s)
+		if err != nil {
+			return err
+		}
+		did_string = parsed_did.String()
+	}
+
 	if !op.IsSigned() {
 		privStr := cctx.String("plc-private-rotation-key")
 		if privStr == "" {
@@ -148,7 +154,15 @@ func runSubmit(cctx *cli.Context) error {
 		}
 	}
 
-	entry, err := c.Submit(ctx, did.String(), op)
+	// This is a genesis op, DID must be computed
+	if op.IsGenesis() {
+		did_string, err = op.DID()
+		if err != nil {
+			return err
+		}
+	}
+
+	entry, err := c.Submit(ctx, did_string, op)
 	if err != nil {
 		return err
 	}
