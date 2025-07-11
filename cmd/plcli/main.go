@@ -94,7 +94,7 @@ func main() {
 	}
 	h := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})
 	slog.SetDefault(slog.New(h))
-	app.Run(os.Args)
+	app.RunAndExitOnError()
 }
 
 func runResolve(cctx *cli.Context) error {
