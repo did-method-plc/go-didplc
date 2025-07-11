@@ -31,13 +31,13 @@ func main() {
 		},
 	}
 	app.Commands = []*cli.Command{
-		&cli.Command{
+		{
 			Name:      "resolve",
 			Usage:     "resolve a DID from remote PLC directory",
 			ArgsUsage: "<did>",
 			Action:    runResolve,
 		},
-		&cli.Command{
+		{
 			Name:      "submit",
 			Usage:     "submit a PLC operation (reads JSON from stdin)",
 			ArgsUsage: "<did>",
@@ -50,19 +50,19 @@ func main() {
 				},
 			},
 		},
-		&cli.Command{
+		{
 			Name:      "oplog",
 			Usage:     "fetch log of operations from PLC directory, for a single DID",
 			ArgsUsage: "<did>",
 			Action:    runOpLog,
 		},
-		&cli.Command{
+		{
 			Name:      "auditlog",
 			Usage:     "fetch audit log of operations from PLC directory, for a single DID (includes nullified ops, timestamps)",
 			ArgsUsage: "<did>",
 			Action:    runAuditLog,
 		},
-		&cli.Command{
+		{
 			Name:      "verify",
 			Usage:     "fetch audit log for a DID, and verify all operations",
 			ArgsUsage: "<did>",
@@ -74,12 +74,12 @@ func main() {
 				},
 			},
 		},
-		&cli.Command{
+		{
 			Name:   "keygen",
 			Usage:  "generate a fresh k256 private key, printed to stdout as a multibase string",
 			Action: runKeyGen,
 		},
-		&cli.Command{
+		{
 			Name:   "derive_pubkey",
 			Usage:  "derive a public key and print to stdout in did:key format",
 			Action: runDerivePubkey,
@@ -94,7 +94,7 @@ func main() {
 	}
 	h := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})
 	slog.SetDefault(slog.New(h))
-	app.RunAndExitOnError()
+	app.Run(os.Args)
 }
 
 func runResolve(cctx *cli.Context) error {
