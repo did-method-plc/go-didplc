@@ -184,8 +184,7 @@ func runSubmit(cctx *cli.Context) error {
 		}
 	}
 
-	err = c.Submit(ctx, did_string, op)
-	if err != nil {
+	if err := c.Submit(ctx, did_string, op); err != nil {
 		return err
 	}
 
