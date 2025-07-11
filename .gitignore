@@ -25,4 +25,4 @@ test-coverage.out
 !.github/
 !.golangci.yaml
 
-plcli
+/plcli

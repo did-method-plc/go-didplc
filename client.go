@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 
@@ -25,6 +26,25 @@ var (
 	ErrDIDNotFound      = errors.New("DID not found in PLC directory")
 	DefaultDirectoryURL = "https://plc.directory"
 )
+
+// turn a non-200 HTTP response into a descriptive error, and log the body
+func processErrorResponse(resp *http.Response, msg string) error {
+	if resp.StatusCode == http.StatusNotFound {
+		return ErrDIDNotFound
+	}
+
+	var body_str string
+	body := new(strings.Builder)
+	_, err := io.Copy(body, resp.Body)
+	if err != nil {
+		body_str = "<failed to read response body>"
+	} else {
+		body_str = body.String()
+	}
+	log.Println(body_str) // TODO: configure logging better
+
+	return fmt.Errorf("%s, HTTP status: %d", msg, resp.StatusCode)
+}
 
 // common logic used for resolve, oplog, auditlog
 func (c *Client) directoryGET(ctx context.Context, path string) (*http.Response, error) {
@@ -45,14 +65,10 @@ func (c *Client) directoryGET(ctx context.Context, path string) (*http.Response,
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed did:plc directory resolution: %w", err)
-	}
-	if resp.StatusCode == http.StatusNotFound {
-		return nil, ErrDIDNotFound
+		return nil, fmt.Errorf("failed did:plc directory request: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		// TODO: log error response body
-		return nil, fmt.Errorf("failed did:web well-known fetch, HTTP status: %d", resp.StatusCode)
+		return nil, processErrorResponse(resp, "failed did:plc directory request")
 	}
 
 	return resp, nil
@@ -108,19 +124,8 @@ func (c *Client) Submit(ctx context.Context, did string, op Operation) error {
 	if err != nil {
 		return fmt.Errorf("did:plc operation submission failed: %w", err)
 	}
-	if resp.StatusCode == http.StatusNotFound {
-		return ErrDIDNotFound
-	}
 	if resp.StatusCode != http.StatusOK {
-		var body_str string
-		body := new(strings.Builder)
-		_, err := io.Copy(body, resp.Body)
-		if err != nil {
-			body_str = "<failed to read response body>"
-		} else {
-			body_str = body.String()
-		}
-		return fmt.Errorf("failed did:plc operation submission, HTTP status: %d\n%s", resp.StatusCode, body_str)
+		return processErrorResponse(resp, "failed did:plc operation submission")
 	}
 
 	return nil
