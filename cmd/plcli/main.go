@@ -15,6 +15,8 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+const PLCLI_USER_AGENT = "go-didplc/plcli"
+
 func main() {
 	app := cli.App{
 		Name:  "plcli",
@@ -72,6 +74,23 @@ func main() {
 				},
 			},
 		},
+		&cli.Command{
+			Name:   "keygen",
+			Usage:  "generate a fresh k256 private key, printed to stdout as a multibase string",
+			Action: runKeyGen,
+		},
+		&cli.Command{
+			Name:   "derive_pubkey",
+			Usage:  "derive a public key and print to stdout in did:key format",
+			Action: runDerivePubkey,
+			Flags: []cli.Flag{
+				&cli.StringFlag{
+					Name:    "plc-private-rotation-key",
+					Usage:   "private key used as input (multibase syntax)",
+					EnvVars: []string{"PLC_PRIVATE_ROTATION_KEY"},
+				},
+			},
+		},
 	}
 	h := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})
 	slog.SetDefault(slog.New(h))
@@ -94,6 +113,7 @@ func runResolve(cctx *cli.Context) error {
 
 	c := didplc.Client{
 		DirectoryURL: cctx.String("plc-host"),
+		UserAgent:    PLCLI_USER_AGENT,
 	}
 	doc, err := c.Resolve(ctx, did.String())
 	if err != nil {
@@ -109,19 +129,10 @@ func runResolve(cctx *cli.Context) error {
 
 func runSubmit(cctx *cli.Context) error {
 	ctx := context.Background()
-	s := cctx.Args().First()
-	if s == "" {
-		fmt.Println("need to provide DID as an argument")
-		os.Exit(-1)
-	}
-
-	did, err := syntax.ParseDID(s)
-	if err != nil {
-		return err
-	}
 
 	c := didplc.Client{
 		DirectoryURL: cctx.String("plc-host"),
+		UserAgent:    PLCLI_USER_AGENT,
 	}
 
 	inBytes, err := io.ReadAll(os.Stdin)
@@ -133,6 +144,23 @@ func runSubmit(cctx *cli.Context) error {
 		return err
 	}
 	op := enum.AsOperation()
+
+	s := cctx.Args().First()
+	var did_string string
+	if s == "" {
+		if !op.IsGenesis() {
+			fmt.Println("a DID must be provided as argument for non-genesis ops")
+			os.Exit(-1)
+		}
+		// else, did string will be computed after signing
+	} else {
+		// it's already a string, but we round-trip it to make sure it's well-formed
+		parsed_did, err := syntax.ParseDID(s)
+		if err != nil {
+			return err
+		}
+		did_string = parsed_did.String()
+	}
 
 	if !op.IsSigned() {
 		privStr := cctx.String("plc-private-rotation-key")
@@ -148,15 +176,19 @@ func runSubmit(cctx *cli.Context) error {
 		}
 	}
 
-	entry, err := c.Submit(ctx, did.String(), op)
-	if err != nil {
+	// This is a genesis op, DID must be computed
+	if op.IsGenesis() {
+		did_string, err = op.DID()
+		if err != nil {
+			return err
+		}
+	}
+
+	if err := c.Submit(ctx, did_string, op); err != nil {
 		return err
 	}
-	jsonBytes, err := json.Marshal(&entry)
-	if err != nil {
-		return err
-	}
-	fmt.Println(string(jsonBytes))
+
+	fmt.Printf("Successfully submited operation: %s/%s\n", c.DirectoryURL, did_string)
 	return nil
 }
 
@@ -174,6 +206,7 @@ func fetchOplog(cctx *cli.Context) ([]didplc.LogEntry, error) {
 
 	c := didplc.Client{
 		DirectoryURL: cctx.String("plc-host"),
+		UserAgent:    PLCLI_USER_AGENT,
 	}
 	entries, err := c.OpLog(ctx, did.String(), cctx.Bool("audit"))
 	if err != nil {
@@ -208,5 +241,37 @@ func runVerify(cctx *cli.Context) error {
 	}
 
 	fmt.Println("valid")
+	return nil
+}
+
+func runKeyGen(cctx *cli.Context) error {
+	// TODO: support P256 also
+	privkey, err := crypto.GeneratePrivateKeyK256()
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(privkey.Multibase())
+
+	return nil
+}
+
+func runDerivePubkey(cctx *cli.Context) error {
+	privStr := cctx.String("plc-private-rotation-key")
+	if privStr == "" {
+		return fmt.Errorf("private key is required")
+	}
+	privkey, err := crypto.ParsePrivateMultibase(privStr)
+	if err != nil {
+		return err
+	}
+
+	pubkey, err := privkey.PublicKey()
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(pubkey.DIDKey())
+
 	return nil
 }
