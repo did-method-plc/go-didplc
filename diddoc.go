@@ -1,7 +1,5 @@
 package didplc
 
-import ()
-
 type DocVerificationMethod struct {
 	ID                 string `json:"id"`
 	Type               string `json:"type"`
@@ -17,7 +15,7 @@ type DocService struct {
 
 type Doc struct {
 	ID                 string                  `json:"id"`
-	AlsoKnownAs        []string                `json:"alsoKnownAs,omitempty"`
-	VerificationMethod []DocVerificationMethod `json:"verificationMethod,omitempty"`
-	Service            []DocService            `json:"service,omitempty"`
+	AlsoKnownAs        []string                `json:"alsoKnownAs"`
+	VerificationMethod []DocVerificationMethod `json:"verificationMethod"`
+	Service            []DocService            `json:"service"`
 }

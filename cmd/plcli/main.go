@@ -119,7 +119,7 @@ func runResolve(cctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	jsonBytes, err := json.Marshal(&doc)
+	jsonBytes, err := json.MarshalIndent(&doc, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -221,7 +221,7 @@ func runOpLog(cctx *cli.Context) error {
 		return err
 	}
 
-	jsonBytes, err := json.Marshal(&entries)
+	jsonBytes, err := json.MarshalIndent(&entries, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -258,7 +258,7 @@ func runAuditLog(cctx *cli.Context) error {
 		return err
 	}
 
-	jsonBytes, err := json.Marshal(&entries)
+	jsonBytes, err := json.MarshalIndent(&entries, "", "  ")
 	if err != nil {
 		return err
 	}
