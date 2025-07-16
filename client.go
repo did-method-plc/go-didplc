@@ -7,7 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -33,15 +33,13 @@ func processErrorResponse(resp *http.Response, msg string) error {
 		return ErrDIDNotFound
 	}
 
-	var body_str string
 	body := new(strings.Builder)
 	_, err := io.Copy(body, resp.Body)
 	if err != nil {
-		body_str = "<failed to read response body>"
+		slog.Info("failed reading PLC directory response body", "status_code", resp.StatusCode)
 	} else {
-		body_str = body.String()
+		slog.Info("PLC directory request failed", "status_code", resp.StatusCode, "body", body.String())
 	}
-	log.Println(body_str) // TODO: configure logging better
 
 	return fmt.Errorf("%s, HTTP status: %d", msg, resp.StatusCode)
 }
