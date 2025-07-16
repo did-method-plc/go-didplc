@@ -82,6 +82,7 @@ type OpEnum struct {
 }
 
 var ErrNotGenesisOp = errors.New("not a genesis PLC operation")
+var ErrNotSignedOp = errors.New("not a signed PLC operation")
 
 func init() {
 	cbor.RegisterCborType(OpService{})
@@ -140,6 +141,9 @@ func (op *RegularOp) IsSigned() bool {
 func (op *RegularOp) DID() (string, error) {
 	if !op.IsGenesis() {
 		return "", ErrNotGenesisOp
+	}
+	if !op.IsSigned() {
+		return "", ErrNotSignedOp
 	}
 	hash := sha256.Sum256(op.SignedCBORBytes())
 	suffix := base32.StdEncoding.EncodeToString(hash[:])[:24]
@@ -273,6 +277,9 @@ func (op *LegacyOp) IsSigned() bool {
 func (op *LegacyOp) DID() (string, error) {
 	if !op.IsGenesis() {
 		return "", ErrNotGenesisOp
+	}
+	if !op.IsSigned() {
+		return "", ErrNotSignedOp
 	}
 	hash := sha256.Sum256(op.SignedCBORBytes())
 	suffix := base32.StdEncoding.EncodeToString(hash[:])[:24]
