@@ -26,7 +26,7 @@ type Operation interface {
 	IsGenesis() bool
 	// whether this operation has a signature or is unsigned
 	IsSigned() bool
-	// returns the DID for a genesis op (errors if this op is not a genesis op)
+	// returns the DID for a genesis op (errors if this op is not a genesis op, or is not signed)
 	DID() (string, error)
 	// signs the object in-place
 	Sign(priv crypto.PrivateKey) error
