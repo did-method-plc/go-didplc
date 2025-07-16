@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -26,18 +27,31 @@ var (
 	DefaultDirectoryURL = "https://plc.directory"
 )
 
-func (c *Client) Resolve(ctx context.Context, did string) (*Doc, error) {
-	if !strings.HasPrefix(did, "did:plc:") {
-		return nil, fmt.Errorf("expected a did:plc, got: %s", did)
+// turn a non-200 HTTP response into a descriptive error, and log the body
+func processErrorResponse(resp *http.Response, msg string) error {
+	if resp.StatusCode == http.StatusNotFound {
+		return ErrDIDNotFound
 	}
 
+	body := new(strings.Builder)
+	_, err := io.Copy(body, resp.Body)
+	if err != nil {
+		slog.Info("failed reading PLC directory response body", "status_code", resp.StatusCode)
+	} else {
+		slog.Info("PLC directory request failed", "status_code", resp.StatusCode, "body", body.String())
+	}
+
+	return fmt.Errorf("%s, HTTP status: %d", msg, resp.StatusCode)
+}
+
+// common logic used for resolve, oplog, auditlog
+func (c *Client) directoryGET(ctx context.Context, path string) (*http.Response, error) {
 	plcURL := c.DirectoryURL
 	if plcURL == "" {
 		plcURL = DefaultDirectoryURL
 	}
 
-	url := plcURL + "/" + did
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", plcURL+path, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -49,13 +63,23 @@ func (c *Client) Resolve(ctx context.Context, did string) (*Doc, error) {
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed did:plc directory resolution: %w", err)
-	}
-	if resp.StatusCode == http.StatusNotFound {
-		return nil, ErrDIDNotFound
+		return nil, fmt.Errorf("failed did:plc directory request: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed did:web well-known fetch, HTTP status: %d", resp.StatusCode)
+		return nil, processErrorResponse(resp, "failed did:plc directory request")
+	}
+
+	return resp, nil
+}
+
+func (c *Client) Resolve(ctx context.Context, did string) (*Doc, error) {
+	if !strings.HasPrefix(did, "did:plc:") {
+		return nil, fmt.Errorf("expected a did:plc, got: %s", did)
+	}
+
+	resp, err := c.directoryGET(ctx, "/"+did)
+	if err != nil {
+		return nil, err
 	}
 
 	var doc Doc
@@ -98,62 +122,43 @@ func (c *Client) Submit(ctx context.Context, did string, op Operation) error {
 	if err != nil {
 		return fmt.Errorf("did:plc operation submission failed: %w", err)
 	}
-	if resp.StatusCode == http.StatusNotFound {
-		return ErrDIDNotFound
-	}
 	if resp.StatusCode != http.StatusOK {
-		var body_str string
-		body := new(strings.Builder)
-		_, err := io.Copy(body, resp.Body)
-		if err != nil {
-			body_str = "<failed to read response body>"
-		} else {
-			body_str = body.String()
-		}
-		return fmt.Errorf("failed did:plc operation submission, HTTP status: %d\n%s", resp.StatusCode, body_str)
+		return processErrorResponse(resp, "failed did:plc operation submission")
 	}
 
 	return nil
 }
 
-func (c *Client) OpLog(ctx context.Context, did string, audit bool) ([]LogEntry, error) {
+func (c *Client) OpLog(ctx context.Context, did string) ([]OpEnum, error) {
 	if !strings.HasPrefix(did, "did:plc:") {
 		return nil, fmt.Errorf("expected a did:plc, got: %s", did)
 	}
 
-	plcURL := c.DirectoryURL
-	if plcURL == "" {
-		plcURL = DefaultDirectoryURL
-	}
-
-	url := plcURL + "/" + did + "/log"
-	if audit {
-		url += "/audit"
-	}
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	resp, err := c.directoryGET(ctx, "/"+did+"/log")
 	if err != nil {
 		return nil, err
 	}
-	if c.UserAgent != "" {
-		req.Header.Set("User-Agent", c.UserAgent)
-	} else {
-		req.Header.Set("User-Agent", "go-did-method-plc")
+
+	var entries []OpEnum
+	if err := json.NewDecoder(resp.Body).Decode(&entries); err != nil {
+		return nil, fmt.Errorf("failed parse of did:plc op log JSON: %w", err)
+	}
+	return entries, nil
+}
+
+func (c *Client) AuditLog(ctx context.Context, did string) ([]LogEntry, error) {
+	if !strings.HasPrefix(did, "did:plc:") {
+		return nil, fmt.Errorf("expected a did:plc, got: %s", did)
 	}
 
-	resp, err := c.HTTPClient.Do(req)
+	resp, err := c.directoryGET(ctx, "/"+did+"/log/audit")
 	if err != nil {
-		return nil, fmt.Errorf("failed did:plc directory resolution: %w", err)
-	}
-	if resp.StatusCode == http.StatusNotFound {
-		return nil, ErrDIDNotFound
-	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed did:web well-known fetch, HTTP status: %d", resp.StatusCode)
+		return nil, err
 	}
 
 	var entries []LogEntry
 	if err := json.NewDecoder(resp.Body).Decode(&entries); err != nil {
-		return nil, fmt.Errorf("failed parse of did:plc document JSON: %w", err)
+		return nil, fmt.Errorf("failed parse of did:plc audit log JSON: %w", err)
 	}
 	return entries, nil
 }

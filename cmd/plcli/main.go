@@ -31,13 +31,13 @@ func main() {
 		},
 	}
 	app.Commands = []*cli.Command{
-		&cli.Command{
+		{
 			Name:      "resolve",
 			Usage:     "resolve a DID from remote PLC directory",
 			ArgsUsage: "<did>",
 			Action:    runResolve,
 		},
-		&cli.Command{
+		{
 			Name:      "submit",
 			Usage:     "submit a PLC operation (reads JSON from stdin)",
 			ArgsUsage: "<did>",
@@ -50,19 +50,19 @@ func main() {
 				},
 			},
 		},
-		&cli.Command{
+		{
 			Name:      "oplog",
 			Usage:     "fetch log of operations from PLC directory, for a single DID",
 			ArgsUsage: "<did>",
 			Action:    runOpLog,
-			Flags: []cli.Flag{
-				&cli.BoolFlag{
-					Name:  "audit",
-					Usage: "audit mode, with nullified entries included",
-				},
-			},
 		},
-		&cli.Command{
+		{
+			Name:      "auditlog",
+			Usage:     "fetch audit log of operations from PLC directory, for a single DID (includes nullified ops, timestamps)",
+			ArgsUsage: "<did>",
+			Action:    runAuditLog,
+		},
+		{
 			Name:      "verify",
 			Usage:     "fetch audit log for a DID, and verify all operations",
 			ArgsUsage: "<did>",
@@ -74,12 +74,12 @@ func main() {
 				},
 			},
 		},
-		&cli.Command{
+		{
 			Name:   "keygen",
 			Usage:  "generate a fresh k256 private key, printed to stdout as a multibase string",
 			Action: runKeyGen,
 		},
-		&cli.Command{
+		{
 			Name:   "derive_pubkey",
 			Usage:  "derive a public key and print to stdout in did:key format",
 			Action: runDerivePubkey,
@@ -119,7 +119,7 @@ func runResolve(cctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	jsonBytes, err := json.Marshal(&doc)
+	jsonBytes, err := json.MarshalIndent(&doc, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -192,7 +192,7 @@ func runSubmit(cctx *cli.Context) error {
 	return nil
 }
 
-func fetchOplog(cctx *cli.Context) ([]didplc.LogEntry, error) {
+func fetchOplog(cctx *cli.Context) ([]didplc.OpEnum, error) {
 	ctx := context.Background()
 	s := cctx.Args().First()
 	if s == "" {
@@ -208,7 +208,7 @@ func fetchOplog(cctx *cli.Context) ([]didplc.LogEntry, error) {
 		DirectoryURL: cctx.String("plc-host"),
 		UserAgent:    PLCLI_USER_AGENT,
 	}
-	entries, err := c.OpLog(ctx, did.String(), cctx.Bool("audit"))
+	entries, err := c.OpLog(ctx, did.String())
 	if err != nil {
 		return nil, err
 	}
@@ -221,7 +221,44 @@ func runOpLog(cctx *cli.Context) error {
 		return err
 	}
 
-	jsonBytes, err := json.Marshal(&entries)
+	jsonBytes, err := json.MarshalIndent(&entries, "", "  ")
+	if err != nil {
+		return err
+	}
+	fmt.Println(string(jsonBytes))
+	return nil
+}
+
+func fetchAuditlog(cctx *cli.Context) ([]didplc.LogEntry, error) {
+	ctx := context.Background()
+	s := cctx.Args().First()
+	if s == "" {
+		return nil, fmt.Errorf("need to provide DID as an argument")
+	}
+
+	did, err := syntax.ParseDID(s)
+	if err != nil {
+		return nil, err
+	}
+
+	c := didplc.Client{
+		DirectoryURL: cctx.String("plc-host"),
+		UserAgent:    PLCLI_USER_AGENT,
+	}
+	entries, err := c.AuditLog(ctx, did.String())
+	if err != nil {
+		return nil, err
+	}
+	return entries, nil
+}
+
+func runAuditLog(cctx *cli.Context) error {
+	entries, err := fetchAuditlog(cctx)
+	if err != nil {
+		return err
+	}
+
+	jsonBytes, err := json.MarshalIndent(&entries, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -230,7 +267,7 @@ func runOpLog(cctx *cli.Context) error {
 }
 
 func runVerify(cctx *cli.Context) error {
-	entries, err := fetchOplog(cctx)
+	entries, err := fetchAuditlog(cctx)
 	if err != nil {
 		return err
 	}
