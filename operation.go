@@ -173,8 +173,15 @@ func verifySigOp(op Operation, pub crypto.PublicKey, sig *string) error {
 	if sig == nil || *sig == "" {
 		return fmt.Errorf("can't verify empty signature")
 	}
+
+	// this check is required because .Strict() alone is not strict enough.
+	// see https://pkg.go.dev/encoding/base64#Encoding.Strict
+	if strings.Contains(*sig, "\r") || strings.Contains(*sig, "\n") {
+		return fmt.Errorf("invalid signature encoding (CRLF)")
+	}
+
 	b := op.UnsignedCBORBytes()
-	sigBytes, err := base64.RawURLEncoding.DecodeString(*sig)
+	sigBytes, err := base64.RawURLEncoding.Strict().DecodeString(*sig)
 	if err != nil {
 		return err
 	}
