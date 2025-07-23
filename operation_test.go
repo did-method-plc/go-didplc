@@ -68,6 +68,7 @@ func TestLogEntryInvalid(t *testing.T) {
 		"testdata/log_invalid_sig_b64_padding_chars.json",
 		"testdata/log_invalid_sig_b64_padding_bits.json",
 		"testdata/log_invalid_sig_b64_newline.json",
+		"testdata/log_invalid_sig_der.json",
 	}
 	for _, p := range list {
 		entries := loadTestLogEntries(t, p)
