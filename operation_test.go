@@ -39,6 +39,8 @@ func TestLogEntryValidate(t *testing.T) {
 		"testdata/log_bskyapp.json",
 		"testdata/log_legacy_dholms.json",
 		"testdata/log_bnewbold_robocracy.json",
+		"testdata/log_empty_rotation_keys.json",
+		"testdata/log_duplicate_rotation_keys.json", // XXX: invalid according to spec, valid according to TS reference impl
 	}
 	for _, p := range list {
 		entries := loadTestLogEntries(t, p)
