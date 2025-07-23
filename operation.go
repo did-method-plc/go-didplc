@@ -335,7 +335,7 @@ func (op *LegacyOp) Doc(did string) (Doc, error) {
 // converts a legacy "create" op to an (unsigned) "plc_operation"
 func (op *LegacyOp) RegularOp() RegularOp {
 	return RegularOp{
-		RotationKeys: []string{op.RecoveryKey},
+		RotationKeys: []string{op.RecoveryKey, op.SigningKey},
 		VerificationMethods: map[string]string{
 			"atproto": op.SigningKey,
 		},

@@ -100,7 +100,8 @@ func VerifyOpLog(entries []LogEntry) error {
 				return fmt.Errorf("first log entry must be a plc_operation or create (legacy)")
 			}
 
-			err := VerifySignatureAny(&op, op.RotationKeys)
+			// if the operation is a legacy op, we must verify it in its legacy format
+			err := VerifySignatureAny(oe.Operation.AsOperation(), op.RotationKeys)
 			if err != nil {
 				return err
 			}
