@@ -12,6 +12,14 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+var VALID_LOG_PATHS = [...]string{
+	"testdata/log_bskyapp.json",
+	"testdata/log_legacy_dholms.json",
+	"testdata/log_bnewbold_robocracy.json",
+	"testdata/log_empty_rotation_keys.json",
+	"testdata/log_duplicate_rotation_keys.json", // XXX: invalid according to spec, valid according to TS reference impl
+}
+
 func loadTestLogEntries(t *testing.T, p string) []LogEntry {
 	f, err := os.Open(p)
 	if err != nil {
@@ -35,18 +43,21 @@ func loadTestLogEntries(t *testing.T, p string) []LogEntry {
 func TestLogEntryValidate(t *testing.T) {
 	assert := assert.New(t)
 
-	list := []string{
-		"testdata/log_bskyapp.json",
-		"testdata/log_legacy_dholms.json",
-		"testdata/log_bnewbold_robocracy.json",
-		"testdata/log_empty_rotation_keys.json",
-		"testdata/log_duplicate_rotation_keys.json", // XXX: invalid according to spec, valid according to TS reference impl
-	}
-	for _, p := range list {
+	for _, p := range VALID_LOG_PATHS {
 		entries := loadTestLogEntries(t, p)
 		for _, le := range entries {
 			assert.NoError(le.Validate())
 		}
+	}
+}
+
+// similar to the above test, but audits the log as a whole rather than inspecting individual ops
+func TestAuditLogValidate(t *testing.T) {
+	assert := assert.New(t)
+
+	for _, p := range VALID_LOG_PATHS {
+		entries := loadTestLogEntries(t, p)
+		assert.NoError(VerifyOpLog(entries), entries[0].DID)
 	}
 }
 

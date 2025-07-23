@@ -78,3 +78,72 @@ func TestExportLogEntryValidate(t *testing.T) {
 		i++
 	}
 }
+
+/*
+Tests "audit logs" in bulk.
+
+Each line of "plc_audit_log.jsonlines" is an array of operation logs for a particular DID, in chronological order.
+
+i.e. each line is the same data you would expect from `/<DID>/log/audit`
+
+It was produced by processing an `/export` dump to group by DID.
+
+go test -run TestExportAuditLogEntryValidate -timeout 0
+*/
+func TestExportAuditLogEntryValidate(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
+	fmt.Println("NOTE: Running TestExportAuditLogEntryValidate. This is slow. You may want `go test -short`")
+
+	assert := assert.New(t)
+
+	f, err := os.Open("../plc_scrape/plc_audit_log_staging.jsonlines")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+
+	lines := make(chan []byte, 8192)
+	timestamps := make(chan string, 8192)
+
+	var wg sync.WaitGroup
+	numWorkers := runtime.NumCPU()
+	wg.Add(numWorkers)
+	for range numWorkers {
+		go func() {
+			defer wg.Done()
+			for line := range lines {
+				var entries []LogEntry
+				assert.NoError(json.Unmarshal(line, &entries))
+				assert.NoError(VerifyOpLog(entries), entries[0].DID)
+				timestamps <- entries[0].CreatedAt
+			}
+		}()
+	}
+
+	go func() {
+		scanner := bufio.NewScanner(f)
+		for scanner.Scan() {
+			var line = scanner.Bytes()
+			tmp := make([]byte, len(line))
+			copy(tmp, line)
+			lines <- tmp
+		}
+		assert.NoError(scanner.Err())
+		close(lines)
+	}()
+
+	go func() {
+		wg.Wait()
+		close(timestamps)
+	}()
+
+	var i = 0
+	for ts := range timestamps {
+		if i%10000 == 0 {
+			fmt.Println(ts)
+		}
+		i++
+	}
+}
