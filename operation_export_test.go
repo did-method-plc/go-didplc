@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"runtime"
 	"sync"
@@ -11,6 +12,24 @@ import (
 
 	"github.com/stretchr/testify/assert"
 )
+
+func loadJSONStringArray(p string) ([]string, error) {
+	f, err := os.Open(p)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = f.Close() }()
+	fileBytes, err := io.ReadAll(f)
+	if err != nil {
+		return nil, err
+	}
+	var arr []string
+	err = json.Unmarshal(fileBytes, &arr)
+	if err != nil {
+		return nil, err
+	}
+	return arr, nil
+}
 
 /*
 Only tests invididual log entries in isolation - does not look at `prev` etc.,
@@ -98,6 +117,15 @@ func TestExportAuditLogEntryValidate(t *testing.T) {
 
 	assert := assert.New(t)
 
+	known_bad_dids_list, err := loadJSONStringArray("testdata/known_bad_dids.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	known_bad_dids_set := make(map[string]struct{})
+	for _, did := range known_bad_dids_list {
+		known_bad_dids_set[did] = struct{}{}
+	}
+
 	f, err := os.Open("../plc_scrape/plc_audit_log.jsonlines")
 	if err != nil {
 		t.Fatal(err)
@@ -116,15 +144,22 @@ func TestExportAuditLogEntryValidate(t *testing.T) {
 			for line := range lines {
 				var entries []LogEntry
 				assert.NoError(json.Unmarshal(line, &entries))
-				assert.NoError(VerifyOpLog(entries), entries[0].DID)
-				progressDIDs <- entries[0].DID
+				this_did := entries[0].DID
+				if _, exists := known_bad_dids_set[this_did]; exists {
+					// we expect this to fail
+					assert.Error(VerifyOpLog(entries), this_did)
+				} else {
+					// we expect this to not fail
+					assert.NoError(VerifyOpLog(entries), this_did)
+				}
+				progressDIDs <- this_did
 			}
 		}()
 	}
 
 	go func() {
 		scanner := bufio.NewScanner(f)
-		scanner.Buffer(nil, 1000000) // reasonable max size. may need to be bumped if very long logs exist
+		scanner.Buffer(nil, 10000000) // reasonable max size. may need to be bumped if very long logs exist
 		for scanner.Scan() {
 			var line = scanner.Bytes()
 			tmp := make([]byte, len(line))
