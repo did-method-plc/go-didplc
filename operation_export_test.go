@@ -98,14 +98,14 @@ func TestExportAuditLogEntryValidate(t *testing.T) {
 
 	assert := assert.New(t)
 
-	f, err := os.Open("../plc_scrape/plc_audit_log_staging.jsonlines")
+	f, err := os.Open("../plc_scrape/plc_audit_log.jsonlines")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = f.Close() }()
 
 	lines := make(chan []byte, 8192)
-	timestamps := make(chan string, 8192)
+	progressDIDs := make(chan string, 8192)
 
 	var wg sync.WaitGroup
 	numWorkers := runtime.NumCPU()
@@ -117,13 +117,14 @@ func TestExportAuditLogEntryValidate(t *testing.T) {
 				var entries []LogEntry
 				assert.NoError(json.Unmarshal(line, &entries))
 				assert.NoError(VerifyOpLog(entries), entries[0].DID)
-				timestamps <- entries[0].CreatedAt
+				progressDIDs <- entries[0].DID
 			}
 		}()
 	}
 
 	go func() {
 		scanner := bufio.NewScanner(f)
+		scanner.Buffer(nil, 1000000) // reasonable max size. may need to be bumped if very long logs exist
 		for scanner.Scan() {
 			var line = scanner.Bytes()
 			tmp := make([]byte, len(line))
@@ -136,11 +137,11 @@ func TestExportAuditLogEntryValidate(t *testing.T) {
 
 	go func() {
 		wg.Wait()
-		close(timestamps)
+		close(progressDIDs)
 	}()
 
 	var i = 0
-	for ts := range timestamps {
+	for ts := range progressDIDs {
 		if i%10000 == 0 {
 			fmt.Println(ts)
 		}
