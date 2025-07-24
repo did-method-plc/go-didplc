@@ -38,8 +38,14 @@ func (c *LogValidationContext) GetValidationContext(did string, prev string) (st
 	if status == nil {
 		return "", nil, fmt.Errorf("prev CID not found")
 	}
-	// XXX: for safe concurrency we would need to deep-copy the status struct here!
-	return head, status, nil
+
+	// make a deep copy of the status struct so that concurrent mutations are safe
+	allowedKeysCopy := make([]string, len(status.AllowedKeys))
+	copy(allowedKeysCopy, status.AllowedKeys)
+	statusCopy := *status
+	statusCopy.AllowedKeys = allowedKeysCopy
+
+	return head, &statusCopy, nil
 }
 
 func (c *LogValidationContext) CommitValidOperation(did string, head string, prevStatus *OpStatus, op Operation, createdAt string, keyIndex uint) error {
@@ -65,6 +71,7 @@ func (c *LogValidationContext) CommitValidOperation(did string, head string, pre
 		c.markNullifiedOp(prevStatus.LastChild) // recursive, a nop if LastChild is ""
 		prevStatus.AllowedKeys = prevStatus.AllowedKeys[:keyIndex]
 		prevStatus.LastChild = this_cid
+		c.opStatus[op.PrevCIDStr()] = prevStatus // prevStatus was a copy so we need to write it back
 	}
 	c.head[did] = this_cid
 	c.opStatus[this_cid] = &OpStatus{
