@@ -3,12 +3,14 @@ package didplc
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/bluesky-social/indigo/atproto/crypto"
+	"github.com/bluesky-social/indigo/atproto/syntax"
 )
 
 type OpStatus struct {
-	CreatedAt   string // the only immutable field here
+	CreatedAt   time.Time // the only immutable field here
 	Nullified   bool
 	LastChild   string // CID
 	AllowedKeys []string
@@ -16,39 +18,41 @@ type OpStatus struct {
 
 // Note: LogValidationContext is designed such that it could later be turned into an interface,
 // optionally backed by a db rather than in-memory
-// Note: ops are globally unique by CID
+// Note: ops are globally unique by CID, so opStatus map can be shared across all DIDs
+// TODO: track most recent timestamp for each DID, to enforce ordering
 type LogValidationContext struct {
 	head     map[string]string    // DID -> CID, tracks most recent valid op for a particular DID
 	opStatus map[string]*OpStatus // CID -> OpStatus
 	lock     sync.RWMutex
 }
 
-func (c *LogValidationContext) GetValidationContext(did string, prev string) (string, *OpStatus, error) {
+func (c *LogValidationContext) GetValidationContext(did string, cid string) (string, *OpStatus, error) {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 
 	head, exists := c.head[did]
 	if !exists {
-		if prev != "" {
+		if cid != "" {
 			return "", nil, fmt.Errorf("DID not found")
 		}
 		return head, nil, nil // Not an error condition! just means DID is not created yet
 	}
-	status := c.opStatus[prev]
+	status := c.opStatus[cid]
 	if status == nil {
-		return "", nil, fmt.Errorf("prev CID not found")
+		return "", nil, fmt.Errorf("CID not found")
 	}
 
 	// make a deep copy of the status struct so that concurrent mutations are safe
-	allowedKeysCopy := make([]string, len(status.AllowedKeys))
-	copy(allowedKeysCopy, status.AllowedKeys)
 	statusCopy := *status
-	statusCopy.AllowedKeys = allowedKeysCopy
+	statusCopy.AllowedKeys = make([]string, len(status.AllowedKeys))
+	copy(statusCopy.AllowedKeys, status.AllowedKeys)
 
 	return head, &statusCopy, nil
 }
 
-func (c *LogValidationContext) CommitValidOperation(did string, head string, prevStatus *OpStatus, op Operation, createdAt string, keyIndex uint) error {
+func (c *LogValidationContext) CommitValidOperation(did string, head string, prevStatus *OpStatus, op Operation, createdAt time.Time, keyIndex uint) error {
+	this_cid := op.CID().String() // CID() involves expensive-ish serialisation/hashing, best to keep out of the critical section
+
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
@@ -60,7 +64,6 @@ func (c *LogValidationContext) CommitValidOperation(did string, head string, pre
 			return fmt.Errorf("expected genesis op")
 		}
 	}
-	this_cid := op.CID().String()
 	if !op.IsGenesis() {
 		if prevStatus == nil {
 			return fmt.Errorf("invalid prevStatus")
@@ -68,7 +71,12 @@ func (c *LogValidationContext) CommitValidOperation(did string, head string, pre
 		if prevStatus.Nullified {
 			return fmt.Errorf("prev CID is nullified")
 		}
-		c.markNullifiedOp(prevStatus.LastChild) // recursive, a nop if LastChild is ""
+		if prevStatus.LastChild != "" { // this is a nullification
+			if createdAt.Sub(prevStatus.CreatedAt) > 72*time.Hour {
+				return fmt.Errorf("cannot nullify op after 72h")
+			}
+			c.markNullifiedOp(prevStatus.LastChild) // recursive
+		}
 		prevStatus.AllowedKeys = prevStatus.AllowedKeys[:keyIndex]
 		prevStatus.LastChild = this_cid
 		c.opStatus[op.PrevCIDStr()] = prevStatus // prevStatus was a copy so we need to write it back
@@ -186,14 +194,18 @@ func VerifyOpLog(entries []LogEntry) error {
 			return fmt.Errorf("inconsistent CID")
 		}
 
+		datetime, err := syntax.ParseDatetime(oe.CreatedAt)
+		if err != nil {
+			return err
+		}
+		timestamp := datetime.Time()
+
 		//fmt.Println(oe.DID, oe.CID) // XXX: debugging
 
 		head, prevStatus, err := vctx.GetValidationContext(did, op.PrevCIDStr())
 		if err != nil {
 			return err
 		}
-
-		// TODO: check timestamp parses
 
 		if op.IsGenesis() {
 			calc_did, err := op.DID()
@@ -208,7 +220,10 @@ func VerifyOpLog(entries []LogEntry) error {
 			if err != nil {
 				return err
 			}
-			vctx.CommitValidOperation(did, head, prevStatus, op, oe.CreatedAt, 0)
+			err = vctx.CommitValidOperation(did, head, prevStatus, op, timestamp, 0)
+			if err != nil {
+				return err
+			}
 		} else { // not-genesis
 			// TODO: timestamp difference validation
 			validSig := false
@@ -218,7 +233,10 @@ func VerifyOpLog(entries []LogEntry) error {
 					continue
 				}
 				validSig = true
-				vctx.CommitValidOperation(did, head, prevStatus, op, oe.CreatedAt, uint(keyIdx))
+				err = vctx.CommitValidOperation(did, head, prevStatus, op, timestamp, uint(keyIdx))
+				if err != nil {
+					return err
+				}
 				break
 			}
 			if !validSig {
