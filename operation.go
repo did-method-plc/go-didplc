@@ -34,6 +34,11 @@ type Operation interface {
 	VerifySignature(pub crypto.PublicKey) error
 	// returns a DID doc
 	Doc(did string) (Doc, error)
+	// logical equivalent of RotationKeys for any op type
+	// ({RecoveryKey, SigningKey} for legacy genesis, empty slice for Tombstone)
+	EquivalentRotationKeys() []string
+	// CID of the previous operation ("" for genesis ops)
+	PrevCIDStr() string
 }
 
 type OpService struct {
@@ -244,6 +249,17 @@ func (op *RegularOp) Doc(did string) (Doc, error) {
 	return doc, nil
 }
 
+func (op *RegularOp) EquivalentRotationKeys() []string {
+	return op.RotationKeys
+}
+
+func (op *RegularOp) PrevCIDStr() string {
+	if op.Prev == nil {
+		return ""
+	}
+	return *op.Prev
+}
+
 func (op *LegacyOp) CID() cid.Cid {
 	return computeCID(op.SignedCBORBytes())
 }
@@ -335,7 +351,7 @@ func (op *LegacyOp) Doc(did string) (Doc, error) {
 // converts a legacy "create" op to an (unsigned) "plc_operation"
 func (op *LegacyOp) RegularOp() RegularOp {
 	return RegularOp{
-		RotationKeys: []string{op.RecoveryKey, op.SigningKey},
+		RotationKeys: op.EquivalentRotationKeys(),
 		VerificationMethods: map[string]string{
 			"atproto": op.SigningKey,
 		},
@@ -349,6 +365,17 @@ func (op *LegacyOp) RegularOp() RegularOp {
 		Prev: nil, // always a create
 		Sig:  nil, // don't have private key
 	}
+}
+
+func (op *LegacyOp) EquivalentRotationKeys() []string {
+	return []string{op.RecoveryKey, op.SigningKey}
+}
+
+func (op *LegacyOp) PrevCIDStr() string {
+	if op.Prev == nil {
+		return ""
+	}
+	return *op.Prev
 }
 
 func (op *TombstoneOp) CID() cid.Cid {
@@ -403,6 +430,14 @@ func (op *TombstoneOp) VerifySignature(pub crypto.PublicKey) error {
 
 func (op *TombstoneOp) Doc(did string) (Doc, error) {
 	return Doc{}, fmt.Errorf("tombstones do not have a DID document representation")
+}
+
+func (op *TombstoneOp) EquivalentRotationKeys() []string {
+	return []string{}
+}
+
+func (op *TombstoneOp) PrevCIDStr() string {
+	return op.Prev
 }
 
 func (o *OpEnum) MarshalJSON() ([]byte, error) {

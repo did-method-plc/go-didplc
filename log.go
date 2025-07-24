@@ -2,11 +2,94 @@ package didplc
 
 import (
 	"fmt"
-	"time"
+	"sync"
 
 	"github.com/bluesky-social/indigo/atproto/crypto"
-	"github.com/bluesky-social/indigo/atproto/syntax"
 )
+
+type OpStatus struct {
+	CreatedAt   string // the only immutable field here
+	Nullified   bool
+	LastChild   string // CID
+	AllowedKeys []string
+}
+
+// Note: LogValidationContext is designed such that it could later be turned into an interface,
+// optionally backed by a db rather than in-memory
+// Note: ops are globally unique by CID
+type LogValidationContext struct {
+	head     map[string]string    // DID -> CID, tracks most recent valid op for a particular DID
+	opStatus map[string]*OpStatus // CID -> OpStatus
+	lock     sync.RWMutex
+}
+
+func (c *LogValidationContext) GetValidationContext(did string, prev string) (string, *OpStatus, error) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
+	head, exists := c.head[did]
+	if !exists {
+		if prev != "" {
+			return "", nil, fmt.Errorf("DID not found")
+		}
+		return head, nil, nil // Not an error condition! just means DID is not created yet
+	}
+	status := c.opStatus[prev]
+	if status == nil {
+		return "", nil, fmt.Errorf("prev CID not found")
+	}
+	// XXX: for safe concurrency we would need to deep-copy the status struct here!
+	return head, status, nil
+}
+
+func (c *LogValidationContext) CommitValidOperation(did string, head string, prevStatus *OpStatus, op Operation, createdAt string, keyIndex uint) error {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	if head != c.head[did] {
+		return fmt.Errorf("head CID mismatch")
+	}
+	if head == "" {
+		if !op.IsGenesis() {
+			return fmt.Errorf("expected genesis op")
+		}
+	}
+	this_cid := op.CID().String()
+	if !op.IsGenesis() {
+		if prevStatus == nil {
+			return fmt.Errorf("invalid prevStatus")
+		}
+		if prevStatus.Nullified {
+			return fmt.Errorf("prev CID is nullified")
+		}
+		c.markNullifiedOp(prevStatus.LastChild) // recursive, a nop if LastChild is ""
+		prevStatus.AllowedKeys = prevStatus.AllowedKeys[:keyIndex]
+		prevStatus.LastChild = this_cid
+	}
+	c.head[did] = this_cid
+	c.opStatus[this_cid] = &OpStatus{
+		CreatedAt:   createdAt,
+		Nullified:   false,
+		LastChild:   "",
+		AllowedKeys: op.EquivalentRotationKeys(),
+	}
+	return nil
+}
+
+func (c *LogValidationContext) markNullifiedOp(cid string) {
+	if cid == "" {
+		return
+	}
+	op := c.opStatus[cid]
+	if op == nil {
+		panic("cid lookup failed during op nullification")
+	}
+	if op.Nullified {
+		return
+	}
+	op.Nullified = true
+	c.markNullifiedOp(op.LastChild)
+}
 
 type LogEntry struct {
 	DID       string `json:"did"`
@@ -77,99 +160,82 @@ func VerifyOpLog(entries []LogEntry) error {
 	if len(entries) == 0 {
 		return fmt.Errorf("can't verify empty operation log")
 	}
-	tombstoned := false
-	earliestNullified := ""
-	lastTS := ""
-	var last *RegularOp
-	var err error
+
+	did := entries[0].DID
+	vctx := LogValidationContext{
+		head:     make(map[string]string),
+		opStatus: make(map[string]*OpStatus),
+	}
 
 	for _, oe := range entries {
-		var op RegularOp
+		if oe.DID != did {
+			return fmt.Errorf("inconsistent DID")
+		}
+		if err := oe.Validate(); err != nil {
+			return err
+		}
+		op := oe.Operation.AsOperation()
+		if op.CID().String() != oe.CID {
+			return fmt.Errorf("inconsistent CID")
+		}
 
-		if err = oe.Validate(); err != nil {
+		//fmt.Println(oe.DID, oe.CID) // XXX: debugging
+
+		head, prevStatus, err := vctx.GetValidationContext(did, op.PrevCIDStr())
+		if err != nil {
 			return err
 		}
 
-		if last == nil {
-			// special processing of first operation
-			if oe.Operation.Regular != nil {
-				op = *oe.Operation.Regular
-			} else if oe.Operation.Legacy != nil {
-				op = oe.Operation.Legacy.RegularOp()
-			} else {
-				return fmt.Errorf("first log entry must be a plc_operation or create (legacy)")
-			}
+		// TODO: check timestamp parses
 
-			// if the operation is a legacy op, we must verify it in its legacy format
-			err := VerifySignatureAny(oe.Operation.AsOperation(), op.RotationKeys)
+		if op.IsGenesis() {
+			calc_did, err := op.DID()
 			if err != nil {
 				return err
 			}
-
-			if oe.Nullified {
-				return fmt.Errorf("first log entry can't be nullified")
+			if calc_did != did {
+				return fmt.Errorf("genesis DID does not match")
 			}
 
-			last = &op
-			lastTS = oe.CreatedAt
-			continue
-		}
-
-		if oe.CreatedAt < lastTS {
-			return fmt.Errorf("operation log was not ordered by timestamp")
-		}
-		if tombstoned {
-			return fmt.Errorf("account was successfully tombstoned, expect end of op log")
-		}
-
-		if !oe.Nullified && earliestNullified != "" {
-			earliest, err := syntax.ParseDatetime(earliestNullified)
+			err = VerifySignatureAny(op, op.EquivalentRotationKeys())
 			if err != nil {
 				return err
 			}
-			current, err := syntax.ParseDatetime(oe.CreatedAt)
-			if err != nil {
-				return err
+			vctx.CommitValidOperation(did, head, prevStatus, op, oe.CreatedAt, 0)
+		} else { // not-genesis
+			// TODO: timestamp difference validation
+			validSig := false
+			for keyIdx, pubkey := range prevStatus.AllowedKeys {
+				err := VerifySignatureAny(op, []string{pubkey})
+				if err != nil {
+					continue
+				}
+				validSig = true
+				vctx.CommitValidOperation(did, head, prevStatus, op, oe.CreatedAt, uint(keyIdx))
+				break
 			}
-			if current.Time().Sub(earliest.Time()) > 72*time.Hour {
-				return fmt.Errorf("time gap between nullified event and overriding event more than recovery window")
+			if !validSig {
+				return fmt.Errorf("invalid signature")
 			}
-			earliestNullified = ""
-		}
-
-		if oe.Nullified && earliestNullified == "" {
-			earliestNullified = oe.CreatedAt
-		}
-
-		if oe.Operation.Tombstone != nil {
-			if err := VerifySignatureAny(oe.Operation.Tombstone, last.RotationKeys); err != nil {
-				return err
-			}
-			if oe.Nullified {
-				continue
-			}
-			tombstoned = true
-			lastTS = oe.CreatedAt
-			continue
-		} else if oe.Operation.Regular != nil {
-			op = *oe.Operation.Regular
-		} else {
-			return fmt.Errorf("expected a plc_operation or plc_tombstone operation")
-		}
-
-		if err := VerifySignatureAny(&op, last.RotationKeys); err != nil {
-			return err
-		}
-		if oe.Nullified {
-			continue
-		} else {
-			last = &op
-			lastTS = oe.CreatedAt
 		}
 	}
 
-	if earliestNullified != "" {
-		return fmt.Errorf("outstanding 'nullified' op at end of log")
+	// check consistency of `nullified` fields
+	for idx, oe := range entries {
+		if idx == 0 {
+			if oe.Nullified {
+				return fmt.Errorf("genesis op cannot be nullified")
+			}
+		} else {
+			_, status, err := vctx.GetValidationContext(did, oe.CID)
+			if err != nil {
+				return err
+			}
+			if status.Nullified != oe.Nullified {
+				return fmt.Errorf("inconsistent nullification status for %s %s", did, oe.CID)
+			}
+		}
 	}
+
 	return nil
 }
