@@ -63,15 +63,26 @@ func (c *LogValidationContext) CommitValidOperation(did string, head string, pre
 		if !op.IsGenesis() {
 			return fmt.Errorf("expected genesis op")
 		}
-	}
-	if !op.IsGenesis() {
+	} else {
+		if op.IsGenesis() {
+			return fmt.Errorf("unexpected genesis op")
+		}
 		if prevStatus == nil {
 			return fmt.Errorf("invalid prevStatus")
 		}
 		if prevStatus.Nullified {
 			return fmt.Errorf("prev CID is nullified")
 		}
-		if prevStatus.LastChild != "" { // this is a nullification
+		if prevStatus.LastChild == "" { // regular update (not a nullification)
+			// note: prevStatus == c.opStatus[head]
+			if createdAt.Sub(prevStatus.CreatedAt) <= 0 {
+				return fmt.Errorf("invalid operation timestamp order")
+			}
+		} else { // this is a nullification
+			// note: prevStatus != c.opStatus[head]
+			if createdAt.Sub(c.opStatus[head].CreatedAt) <= 0 {
+				return fmt.Errorf("invalid operation timestamp order")
+			}
 			if createdAt.Sub(prevStatus.CreatedAt) > 72*time.Hour {
 				return fmt.Errorf("cannot nullify op after 72h")
 			}
