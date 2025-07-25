@@ -197,9 +197,9 @@ func VerifyOpLog(entries []LogEntry) error {
 		if oe.DID != did {
 			return fmt.Errorf("inconsistent DID")
 		}
-		if err := oe.Validate(); err != nil {
-			return err
-		}
+		// NOTE: we do not call oe.Validate() here because we'd end up verifying
+		// genesis op signatures twice.
+		// We check for CID consistency here, and will verify signatures (for all op types) later.
 		op := oe.Operation.AsOperation()
 		if op.CID().String() != oe.CID {
 			return fmt.Errorf("inconsistent CID")
@@ -227,9 +227,6 @@ func VerifyOpLog(entries []LogEntry) error {
 			if calc_did != did {
 				return fmt.Errorf("genesis DID does not match")
 			}
-
-			// NOTE: genesis op signature was already verified in `oe.Validate()`
-			// we should decide where it makes most sense to do it, and not do it twice
 
 			rotationKeys := op.EquivalentRotationKeys()
 			allowedKeys = &rotationKeys
