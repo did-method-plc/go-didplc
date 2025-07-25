@@ -5,7 +5,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bluesky-social/indigo/atproto/crypto"
 	"github.com/bluesky-social/indigo/atproto/syntax"
 )
 
@@ -127,55 +126,28 @@ type LogEntry struct {
 
 // Checks self-consistency of this log entry in isolation. Does not access other context or log entries.
 func (le *LogEntry) Validate() error {
-
-	if le.Operation.Regular != nil {
-		if le.CID != le.Operation.Regular.CID().String() {
-			return fmt.Errorf("log entry CID didn't match computed operation CID")
-		}
-		// NOTE: for non-genesis ops, the rotation key may have bene in a previous op
-		if le.Operation.Regular.IsGenesis() {
-			did, err := le.Operation.Regular.DID()
-			if err != nil {
-				return err
-			}
-			if le.DID != did {
-				return fmt.Errorf("log entry DID didn't match computed genesis operation DID")
-			}
-			if _, err := VerifySignatureAny(le.Operation.Regular, le.Operation.Regular.RotationKeys); err != nil {
-				return fmt.Errorf("failed to validate op genesis signature: %v", err)
-			}
-		}
-	} else if le.Operation.Legacy != nil {
-		if le.CID != le.Operation.Legacy.CID().String() {
-			return fmt.Errorf("log entry CID didn't match computed operation CID")
-		}
-		// NOTE: for non-genesis ops, the rotation key may have bene in a previous op
-		if le.Operation.Legacy.IsGenesis() {
-			did, err := le.Operation.Legacy.DID()
-			if err != nil {
-				return err
-			}
-			if le.DID != did {
-				return fmt.Errorf("log entry DID didn't match computed genesis operation DID")
-			}
-			// TODO: try both signing and recovery key?
-			pub, err := crypto.ParsePublicDIDKey(le.Operation.Legacy.SigningKey)
-			if err != nil {
-				return fmt.Errorf("could not parse recovery key: %v", err)
-			}
-			if err := le.Operation.Legacy.VerifySignature(pub); err != nil {
-				return fmt.Errorf("failed to validate legacy op genesis signature: %v", err)
-			}
-		}
-	} else if le.Operation.Tombstone != nil {
-		if le.CID != le.Operation.Tombstone.CID().String() {
-			return fmt.Errorf("log entry CID didn't match computed operation CID")
-		}
-		// NOTE: for tombstones, the rotation key is always in a previous op
-	} else {
-		return fmt.Errorf("expected tombstone, legacy, or regular PLC operation")
+	op := le.Operation.AsOperation()
+	if op == nil {
+		return fmt.Errorf("invalid operation type")
 	}
-
+	if op.CID().String() != le.CID {
+		return fmt.Errorf("log entry CID didn't match computed operation CID")
+	}
+	if !op.IsSigned() {
+		return fmt.Errorf("log entry was not signed")
+	}
+	if op.IsGenesis() {
+		did, err := op.DID()
+		if err != nil {
+			return err
+		}
+		if le.DID != did {
+			return fmt.Errorf("log entry DID didn't match computed genesis operation DID")
+		}
+		if _, err := VerifySignatureAny(op, op.EquivalentRotationKeys()); err != nil {
+			return fmt.Errorf("failed to validate op genesis signature: %v", err)
+		}
+	}
 	return nil
 }
 
@@ -201,6 +173,9 @@ func VerifyOpLog(entries []LogEntry) error {
 		// genesis op signatures twice.
 		// We check for CID consistency here, and will verify signatures (for all op types) later.
 		op := oe.Operation.AsOperation()
+		if op == nil {
+			return fmt.Errorf("invalid operation type")
+		}
 		if op.CID().String() != oe.CID {
 			return fmt.Errorf("inconsistent CID")
 		}
@@ -220,14 +195,13 @@ func VerifyOpLog(entries []LogEntry) error {
 
 		var allowedKeys *[]string
 		if op.IsGenesis() {
-			calc_did, err := op.DID()
+			calcDid, err := op.DID()
 			if err != nil {
 				return err
 			}
-			if calc_did != did {
+			if calcDid != did {
 				return fmt.Errorf("genesis DID does not match")
 			}
-
 			rotationKeys := op.EquivalentRotationKeys()
 			allowedKeys = &rotationKeys
 		} else { // not-genesis
