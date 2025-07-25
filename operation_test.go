@@ -32,6 +32,7 @@ var INVALID_LOG_PATHS = [...]string{
 	"testdata/log_invalid_sig_k256_high_s.json",
 	"testdata/log_invalid_nullification_reused_key.json",
 	"testdata/log_invalid_nullification_too_slow.json",
+	"testdata/log_invalid_update_nullified.json",
 }
 
 func loadTestLogEntries(t *testing.T, p string) []LogEntry {
@@ -79,8 +80,8 @@ func TestLogEntryInvalid(t *testing.T) {
 	assert := assert.New(t)
 
 	for _, p := range INVALID_LOG_PATHS {
-		if strings.Contains(p, "nullification") {
-			continue // nullification tests do not apply to individual ops
+		if strings.Contains(p, "nullif") {
+			continue // nullification-related negative tests cannot apply to individual ops
 		}
 		entries := loadTestLogEntries(t, p)
 		for _, le := range entries {
