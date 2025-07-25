@@ -22,6 +22,7 @@ var VALID_LOG_PATHS = [...]string{
 	"testdata/log_nullification.json",
 	"testdata/log_nullification_nontrivial.json",
 	"testdata/log_nullification_at_exactly_72h.json",
+	"testdata/log_nullified_tombstone.json",
 }
 
 var INVALID_LOG_PATHS = [...]string{
