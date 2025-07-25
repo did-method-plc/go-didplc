@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/bluesky-social/indigo/atproto/crypto"
@@ -11,6 +12,31 @@ import (
 
 	"github.com/stretchr/testify/assert"
 )
+
+var VALID_LOG_PATHS = [...]string{
+	"testdata/log_bskyapp.json",
+	"testdata/log_legacy_dholms.json",
+	"testdata/log_bnewbold_robocracy.json",
+	"testdata/log_empty_rotation_keys.json",
+	"testdata/log_duplicate_rotation_keys.json", // XXX: invalid according to spec, valid according to TS reference impl
+	"testdata/log_nullification.json",
+	"testdata/log_nullification_nontrivial.json",
+	"testdata/log_nullification_at_exactly_72h.json",
+	"testdata/log_nullified_tombstone.json",
+	"testdata/log_tombstone.json",
+}
+
+var INVALID_LOG_PATHS = [...]string{
+	"testdata/log_invalid_sig_b64_padding_chars.json",
+	"testdata/log_invalid_sig_b64_padding_bits.json",
+	"testdata/log_invalid_sig_b64_newline.json",
+	"testdata/log_invalid_sig_der.json",
+	"testdata/log_invalid_sig_p256_high_s.json",
+	"testdata/log_invalid_sig_k256_high_s.json",
+	"testdata/log_invalid_nullification_reused_key.json",
+	"testdata/log_invalid_nullification_too_slow.json",
+	"testdata/log_invalid_update_nullified.json",
+}
 
 func loadTestLogEntries(t *testing.T, p string) []LogEntry {
 	f, err := os.Open(p)
@@ -35,16 +61,44 @@ func loadTestLogEntries(t *testing.T, p string) []LogEntry {
 func TestLogEntryValidate(t *testing.T) {
 	assert := assert.New(t)
 
-	list := []string{
-		"testdata/log_bskyapp.json",
-		"testdata/log_legacy_dholms.json",
-		"testdata/log_bnewbold_robocracy.json",
-	}
-	for _, p := range list {
+	for _, p := range VALID_LOG_PATHS {
 		entries := loadTestLogEntries(t, p)
 		for _, le := range entries {
-			assert.NoError(le.Validate())
+			assert.NoError(le.Validate(), p)
 		}
+	}
+}
+
+// similar to the above test, but audits the log as a whole rather than inspecting individual ops
+func TestAuditLogValidate(t *testing.T) {
+	assert := assert.New(t)
+
+	for _, p := range VALID_LOG_PATHS {
+		entries := loadTestLogEntries(t, p)
+		assert.NoError(VerifyOpLog(entries), p)
+	}
+}
+
+func TestLogEntryInvalid(t *testing.T) {
+	assert := assert.New(t)
+
+	for _, p := range INVALID_LOG_PATHS {
+		if strings.Contains(p, "nullif") {
+			continue // nullification-related negative tests cannot apply to individual ops
+		}
+		entries := loadTestLogEntries(t, p)
+		for _, le := range entries {
+			assert.Error(le.Validate(), p)
+		}
+	}
+}
+
+func TestAuditLogInvalid(t *testing.T) {
+	assert := assert.New(t)
+
+	for _, p := range INVALID_LOG_PATHS {
+		entries := loadTestLogEntries(t, p)
+		assert.Error(VerifyOpLog(entries), p)
 	}
 }
 
