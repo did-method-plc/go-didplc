@@ -20,6 +20,7 @@ var VALID_LOG_PATHS = [...]string{
 	"testdata/log_empty_rotation_keys.json",
 	"testdata/log_duplicate_rotation_keys.json", // XXX: invalid according to spec, valid according to TS reference impl
 	"testdata/log_nullification.json",
+	"testdata/log_nullification_nontrivial.json",
 }
 
 var INVALID_LOG_PATHS = [...]string{
