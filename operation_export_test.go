@@ -47,6 +47,15 @@ func TestExportLogEntryValidate(t *testing.T) {
 
 	assert := assert.New(t)
 
+	known_bad_cids_list, err := loadJSONStringArray("testdata/known_bad_cids.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	known_bad_cids_set := make(map[string]struct{})
+	for _, did := range known_bad_cids_list {
+		known_bad_cids_set[did] = struct{}{}
+	}
+
 	// "out.jsonlines" is data from `plc.directory/export`
 	f, err := os.Open("../plc_scrape/out.jsonlines")
 	if err != nil {
@@ -66,7 +75,13 @@ func TestExportLogEntryValidate(t *testing.T) {
 			for line := range lines {
 				var entry LogEntry
 				assert.NoError(json.Unmarshal(line, &entry))
-				assert.NoError(entry.Validate(), entry.DID+" "+entry.CreatedAt)
+				if _, exists := known_bad_cids_set[entry.CID]; exists {
+					// we expect this to fail
+					assert.Error(entry.Validate(), entry.DID+" "+entry.CID)
+				} else {
+					// we expect this to not fail
+					assert.NoError(entry.Validate(), entry.DID+" "+entry.CID)
+				}
 				timestamps <- entry.CreatedAt
 			}
 		}()
