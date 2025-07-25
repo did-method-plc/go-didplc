@@ -83,7 +83,7 @@ func (c *LogValidationContext) CommitValidOperation(did string, head string, pre
 				return fmt.Errorf("invalid operation timestamp order")
 			}
 			if createdAt.Sub(prevStatus.CreatedAt) > 72*time.Hour {
-				return fmt.Errorf("cannot nullify op after 72h")
+				return fmt.Errorf("cannot nullify op after 72h (%s - %s = %s)", createdAt, prevStatus.CreatedAt, createdAt.Sub(prevStatus.CreatedAt))
 			}
 			c.markNullifiedOp(prevStatus.LastChild) // recursive
 		}
