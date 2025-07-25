@@ -19,3 +19,18 @@ These lists do *not* presently include operations/DIDs containing duplicate rota
 (all within 72h)
 
 After operation 6, only op 4 would be nullified. After operation 7, all operations 2-6 will be nullified.
+
+## PLC Export Tests
+
+Some test cases (not run by default) expect full data exports from a PLC directory. The aim is to verify consistency with real data (and secondarily to act as a performance benchmark). This dataset is not included in the repo because it's ~64GB, at time of writing.
+
+Those test can be run like so: (expect to wait ~hours depending on how many CPU cores you have)
+
+```
+go test -run TestExportLogEntryValidate -timeout 0
+go test -run TestExportAuditLogEntryValidate -timeout 0
+```
+
+The first test expects "out.jsonlines", which you can gather for example by running `goat plc dump` (or any other tool that paginates through the `/export` endpoint)
+
+The second test expects "plc_audit_log.jsonlines", which can be constructed by processing "out.jsonlines" with the following python script: https://gist.github.com/DavidBuchanan314/39fa9334e3d182454691d5429a7f199c (all it does is group the operations together by DID, in chronological order)
