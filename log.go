@@ -50,7 +50,7 @@ func (c *LogValidationContext) GetValidationContext(did string, cid string) (str
 	return head, &statusCopy, nil
 }
 
-func (c *LogValidationContext) CommitValidOperation(did string, head string, prevStatus *OpStatus, op Operation, createdAt time.Time, keyIndex uint) error {
+func (c *LogValidationContext) CommitValidOperation(did string, head string, prevStatus *OpStatus, op Operation, createdAt time.Time, keyIndex int) error {
 	this_cid := op.CID().String() // CID() involves expensive-ish serialisation/hashing, best to keep out of the critical section
 
 	c.lock.Lock()
@@ -141,7 +141,7 @@ func (le *LogEntry) Validate() error {
 			if le.DID != did {
 				return fmt.Errorf("log entry DID didn't match computed genesis operation DID")
 			}
-			if err := VerifySignatureAny(le.Operation.Regular, le.Operation.Regular.RotationKeys); err != nil {
+			if _, err := VerifySignatureAny(le.Operation.Regular, le.Operation.Regular.RotationKeys); err != nil {
 				return fmt.Errorf("failed to validate op genesis signature: %v", err)
 			}
 		}
@@ -218,6 +218,7 @@ func VerifyOpLog(entries []LogEntry) error {
 			return err
 		}
 
+		var allowedKeys *[]string
 		if op.IsGenesis() {
 			calc_did, err := op.DID()
 			if err != nil {
@@ -227,32 +228,21 @@ func VerifyOpLog(entries []LogEntry) error {
 				return fmt.Errorf("genesis DID does not match")
 			}
 
-			err = VerifySignatureAny(op, op.EquivalentRotationKeys())
-			if err != nil {
-				return err
-			}
-			err = vctx.CommitValidOperation(did, head, prevStatus, op, timestamp, 0)
-			if err != nil {
-				return err
-			}
+			// NOTE: genesis op signature was already verified in `oe.Validate()`
+			// we should decide where it makes most sense to do it, and not do it twice
+
+			rotationKeys := op.EquivalentRotationKeys()
+			allowedKeys = &rotationKeys
 		} else { // not-genesis
-			// TODO: timestamp difference validation
-			validSig := false
-			for keyIdx, pubkey := range prevStatus.AllowedKeys {
-				err := VerifySignatureAny(op, []string{pubkey})
-				if err != nil {
-					continue
-				}
-				validSig = true
-				err = vctx.CommitValidOperation(did, head, prevStatus, op, timestamp, uint(keyIdx))
-				if err != nil {
-					return err
-				}
-				break
-			}
-			if !validSig {
-				return fmt.Errorf("invalid signature")
-			}
+			allowedKeys = &prevStatus.AllowedKeys
+		}
+		keyIdx, err := VerifySignatureAny(op, *allowedKeys)
+		if err != nil {
+			return err
+		}
+		err = vctx.CommitValidOperation(did, head, prevStatus, op, timestamp, keyIdx)
+		if err != nil {
+			return err
 		}
 	}
 
@@ -262,14 +252,13 @@ func VerifyOpLog(entries []LogEntry) error {
 			if oe.Nullified {
 				return fmt.Errorf("genesis op cannot be nullified")
 			}
-		} else {
-			_, status, err := vctx.GetValidationContext(did, oe.CID)
-			if err != nil {
-				return err
-			}
-			if status.Nullified != oe.Nullified {
-				return fmt.Errorf("inconsistent nullification status for %s %s", did, oe.CID)
-			}
+		}
+		_, status, err := vctx.GetValidationContext(did, oe.CID)
+		if err != nil {
+			return err
+		}
+		if status.Nullified != oe.Nullified {
+			return fmt.Errorf("inconsistent nullification status for %s %s", did, oe.CID)
 		}
 	}
 

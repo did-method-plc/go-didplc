@@ -194,24 +194,25 @@ func verifySigOp(op Operation, pub crypto.PublicKey, sig *string) error {
 }
 
 // parsing errors are not ignored (will be returned immediately if found)
-func VerifySignatureAny(op Operation, didKeys []string) error {
+// on success, the index of the first key that was able to validate the signature is returned
+func VerifySignatureAny(op Operation, didKeys []string) (int, error) {
 	if len(didKeys) == 0 {
-		return fmt.Errorf("no keys to verify against")
+		return -1, fmt.Errorf("no keys to verify against")
 	}
-	for _, dk := range didKeys {
+	for idx, dk := range didKeys {
 		pub, err := crypto.ParsePublicDIDKey(dk)
 		if err != nil {
-			return err
+			return -1, err
 		}
 		err = op.VerifySignature(pub)
-		if err != crypto.ErrInvalidSignature {
-			return err
-		}
 		if nil == err {
-			return nil
+			return idx, nil
+		}
+		if err != crypto.ErrInvalidSignature {
+			return -1, err
 		}
 	}
-	return crypto.ErrInvalidSignature
+	return -1, crypto.ErrInvalidSignature
 }
 
 func (op *RegularOp) VerifySignature(pub crypto.PublicKey) error {
