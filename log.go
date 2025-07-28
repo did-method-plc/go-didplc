@@ -217,6 +217,7 @@ func VerifyOpLog(entries []LogEntry) error {
 	}
 
 	// check consistency of `nullified` fields
+	// Note: This has to be a separate loop because an op's eventual nullification status can't be known until after we've processed all operations
 	for idx, oe := range entries {
 		if idx == 0 {
 			if oe.Nullified {
