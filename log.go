@@ -76,7 +76,7 @@ func (c *LogValidationContext) CommitValidOperation(did string, head string, pre
 			if createdAt.Sub(prevStatus.CreatedAt) <= 0 {
 				return fmt.Errorf("invalid operation timestamp order")
 			}
-		} else { // this is a nullification
+		} else { // this is a nullification - prevStatus.LastChild is the CID of the op being nullified
 			// note: prevStatus != c.opStatus[head]
 			if createdAt.Sub(c.opStatus[head].CreatedAt) <= 0 {
 				return fmt.Errorf("invalid operation timestamp order")
