@@ -18,7 +18,6 @@ type OpStatus struct {
 // Note: LogValidationContext is designed such that it could later be turned into an interface,
 // optionally backed by a db rather than in-memory
 // Note: ops are globally unique by CID, so opStatus map can be shared across all DIDs
-// TODO: track most recent timestamp for each DID, to enforce ordering
 type LogValidationContext struct {
 	head     map[string]string    // DID -> CID, tracks most recent valid op for a particular DID
 	opStatus map[string]*OpStatus // CID -> OpStatus
