@@ -97,13 +97,40 @@ func TestLogEntryInvalid(t *testing.T) {
 	}
 }
 
-func TestAuditLogInvalid(t *testing.T) {
+func TestAuditLogInvalidSigEncoding(t *testing.T) {
 	assert := assert.New(t)
 
-	for _, p := range INVALID_LOG_PATHS {
-		entries := loadTestLogEntries(t, p)
-		assert.Error(VerifyOpLog(entries), p)
-	}
+	entries := loadTestLogEntries(t, "testdata/log_invalid_sig_b64_padding_chars.json")
+	assert.ErrorContains(VerifyOpLog(entries), "illegal base64")
+
+	entries = loadTestLogEntries(t, "testdata/log_invalid_sig_b64_padding_bits.json")
+	assert.ErrorContains(VerifyOpLog(entries), "illegal base64")
+
+	entries = loadTestLogEntries(t, "testdata/log_invalid_sig_b64_newline.json")
+	assert.ErrorContains(VerifyOpLog(entries), "CRLF")
+
+	entries = loadTestLogEntries(t, "testdata/log_invalid_sig_der.json")
+	assert.EqualError(VerifyOpLog(entries), "crytographic signature invalid") // Note: there is no reliable way to detect DER-encoded signatures syntactically, so a generic invalid signature error is expected
+
+	entries = loadTestLogEntries(t, "testdata/log_invalid_sig_p256_high_s.json")
+	assert.EqualError(VerifyOpLog(entries), "crytographic signature invalid")
+
+	entries = loadTestLogEntries(t, "testdata/log_invalid_sig_k256_high_s.json")
+	assert.EqualError(VerifyOpLog(entries), "crytographic signature invalid")
+
+}
+
+func TestAuditLogInvalidNullification(t *testing.T) {
+	assert := assert.New(t)
+
+	entries := loadTestLogEntries(t, "testdata/log_invalid_nullification_reused_key.json")
+	assert.EqualError(VerifyOpLog(entries), "crytographic signature invalid") // XXX: This is the expected error message for the current impl logic. This could be improved.
+
+	entries = loadTestLogEntries(t, "testdata/log_invalid_nullification_too_slow.json")
+	assert.ErrorContains(VerifyOpLog(entries), "cannot nullify op after 72h")
+
+	entries = loadTestLogEntries(t, "testdata/log_invalid_update_nullified.json")
+	assert.EqualError(VerifyOpLog(entries), "prev CID is nullified")
 }
 
 func TestCreatePLC(t *testing.T) {
