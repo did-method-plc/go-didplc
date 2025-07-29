@@ -8,23 +8,23 @@ import (
 	"github.com/bluesky-social/indigo/atproto/syntax"
 )
 
-type OpStatus struct {
+type opStatus struct {
 	CreatedAt   time.Time // the only immutable field here
 	Nullified   bool
 	LastChild   string // CID
 	AllowedKeys []string
 }
 
-// Note: LogValidationContext is designed such that it could later be turned into an interface,
+// Note: logValidationContext is designed such that it could later be turned into an interface,
 // optionally backed by a db rather than in-memory
 // Note: ops are globally unique by CID, so opStatus map can be shared across all DIDs
-type LogValidationContext struct {
+type logValidationContext struct {
 	head     map[string]string    // DID -> CID, tracks most recent valid op for a particular DID
-	opStatus map[string]*OpStatus // CID -> OpStatus
+	opStatus map[string]*opStatus // CID -> OpStatus
 	lock     sync.RWMutex
 }
 
-func (c *LogValidationContext) GetValidationContext(did string, cid string) (string, *OpStatus, error) {
+func (c *logValidationContext) GetValidationContext(did string, cid string) (string, *opStatus, error) {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 
@@ -48,7 +48,7 @@ func (c *LogValidationContext) GetValidationContext(did string, cid string) (str
 	return head, &statusCopy, nil
 }
 
-func (c *LogValidationContext) CommitValidOperation(did string, head string, prevStatus *OpStatus, op Operation, createdAt time.Time, keyIndex int) error {
+func (c *logValidationContext) CommitValidOperation(did string, head string, prevStatus *opStatus, op Operation, createdAt time.Time, keyIndex int) error {
 	this_cid := op.CID().String() // CID() involves expensive-ish serialisation/hashing, best to keep out of the critical section
 
 	c.lock.Lock()
@@ -91,7 +91,7 @@ func (c *LogValidationContext) CommitValidOperation(did string, head string, pre
 		c.opStatus[op.PrevCIDStr()] = prevStatus // prevStatus was a copy so we need to write it back
 	}
 	c.head[did] = this_cid
-	c.opStatus[this_cid] = &OpStatus{
+	c.opStatus[this_cid] = &opStatus{
 		CreatedAt:   createdAt,
 		Nullified:   false,
 		LastChild:   "",
@@ -100,7 +100,7 @@ func (c *LogValidationContext) CommitValidOperation(did string, head string, pre
 	return nil
 }
 
-func (c *LogValidationContext) markNullifiedOp(cid string) {
+func (c *logValidationContext) markNullifiedOp(cid string) {
 	if cid == "" {
 		return
 	}
@@ -159,9 +159,9 @@ func VerifyOpLog(entries []LogEntry) error {
 	}
 
 	did := entries[0].DID
-	vctx := LogValidationContext{
+	vctx := logValidationContext{
 		head:     make(map[string]string),
-		opStatus: make(map[string]*OpStatus),
+		opStatus: make(map[string]*opStatus),
 	}
 
 	for _, oe := range entries {
