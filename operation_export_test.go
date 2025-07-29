@@ -51,9 +51,9 @@ func TestExportLogEntryValidate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	known_bad_cids_set := make(map[string]struct{})
-	for _, did := range known_bad_cids_list {
-		known_bad_cids_set[did] = struct{}{}
+	is_known_bad_cid := make(map[string]bool)
+	for _, cid := range known_bad_cids_list {
+		is_known_bad_cid[cid] = true
 	}
 
 	// "out.jsonlines" is data from `plc.directory/export`
@@ -75,7 +75,7 @@ func TestExportLogEntryValidate(t *testing.T) {
 			for line := range lines {
 				var entry LogEntry
 				assert.NoError(json.Unmarshal(line, &entry))
-				if _, exists := known_bad_cids_set[entry.CID]; exists {
+				if is_known_bad_cid[entry.CID] {
 					// we expect this to fail
 					assert.Error(entry.Validate(), entry.DID+" "+entry.CID)
 				} else {
@@ -136,9 +136,9 @@ func TestExportAuditLogEntryValidate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	known_bad_dids_set := make(map[string]struct{})
+	is_known_bad_did := make(map[string]bool)
 	for _, did := range known_bad_dids_list {
-		known_bad_dids_set[did] = struct{}{}
+		is_known_bad_did[did] = true
 	}
 
 	f, err := os.Open("../plc_scrape/plc_audit_log.jsonlines")
@@ -160,7 +160,7 @@ func TestExportAuditLogEntryValidate(t *testing.T) {
 				var entries []LogEntry
 				assert.NoError(json.Unmarshal(line, &entries))
 				this_did := entries[0].DID
-				if _, exists := known_bad_dids_set[this_did]; exists {
+				if is_known_bad_did[this_did] {
 					// we expect this to fail
 					assert.Error(VerifyOpLog(entries), this_did)
 				} else {
