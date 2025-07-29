@@ -30,7 +30,11 @@ var errLogValidationUnrecoverableInternalError = errors.New("logValidationContex
 
 // Retrieve the information required to validate a signature for a particular operation, where `cidStr`
 // corresponds to the `prev` field of the operation you're trying to validate.
-// If you're validating a genesis op (where prev==nil), pass cidStr==""
+// If you're validating a genesis op (i.e. prev==nil), pass cidStr==""
+//
+// The returned string is the current "head" CID of the passed DID.
+// Any subsequent calls to CommitValidOperation must pass the corresponding head, opStatus values.
+//
 // This method may also be used to inspect the nullification status and/or createdAt timestamp for a particular op (by did+cid)
 func (lvc *logValidationContext) GetValidationContext(did string, cidStr string) (string, *opStatus, error) {
 	lvc.lock.RLock()
@@ -69,6 +73,11 @@ func (lvc *logValidationContext) GetValidationContext(did string, cidStr string)
 //  5. This DID has not been updated since the corresponding GetValidationContext call
 //
 // Additionally, the lvc head+opStatus maps are updated to reflect the changes (including updating nullification status if applicable).
+//
+// Although it should be unreachable, errLogValidationUnrecoverableInternalError
+// may be returned if the logValidationContext internal state has become inconsistent.
+// This could happen due to an implementation bug, or if an invalid prevStatus is passed
+// (one not produced by an earlier call to GetValidationContext).
 func (lvc *logValidationContext) CommitValidOperation(did string, head string, prevStatus *opStatus, op Operation, createdAt time.Time, keyIndex int) error {
 	this_cid := op.CID().String() // CID() involves expensive-ish serialisation/hashing, best to keep out of the critical section
 
@@ -99,15 +108,23 @@ func (lvc *logValidationContext) CommitValidOperation(did string, head string, p
 			}
 		} else { // this is a nullification. prevStatus.LastChild is the CID of the op being nullified
 			// note: prevStatus != c.opStatus[head]
-			if createdAt.Sub(lvc.opStatus[head].CreatedAt) <= 0 {
+			headStatus := lvc.opStatus[head]
+			if headStatus == nil {
+				return errLogValidationUnrecoverableInternalError
+			}
+			if createdAt.Sub(headStatus.CreatedAt) <= 0 {
 				return fmt.Errorf("invalid operation timestamp order")
 			}
-			if createdAt.Sub(lvc.opStatus[prevStatus.LastChild].CreatedAt) > 72*time.Hour {
+			lastChildStatus := lvc.opStatus[prevStatus.LastChild]
+			if lastChildStatus == nil {
+				return errLogValidationUnrecoverableInternalError
+			}
+			if createdAt.Sub(lastChildStatus.CreatedAt) > 72*time.Hour {
 				return fmt.Errorf("cannot nullify op after 72h (%s - %s = %s)", createdAt, prevStatus.CreatedAt, createdAt.Sub(prevStatus.CreatedAt))
 			}
 			err := lvc.markNullifiedOp(did, prevStatus.LastChild) // recursive
 			if err != nil {
-				return err // should never happen
+				return err // should never happen, if it does we're in a broken state
 			}
 		}
 		prevStatus.AllowedKeys = prevStatus.AllowedKeys[:keyIndex]
