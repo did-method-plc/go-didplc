@@ -185,8 +185,6 @@ func VerifyOpLog(entries []LogEntry) error {
 		}
 		timestamp := datetime.Time()
 
-		//fmt.Println(oe.DID, oe.CID) // XXX: debugging
-
 		head, prevStatus, err := vctx.GetValidationContext(did, op.PrevCIDStr())
 		if err != nil {
 			return err

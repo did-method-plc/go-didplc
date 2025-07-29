@@ -124,7 +124,7 @@ func TestAuditLogInvalidNullification(t *testing.T) {
 	assert := assert.New(t)
 
 	entries := loadTestLogEntries(t, "testdata/log_invalid_nullification_reused_key.json")
-	assert.EqualError(VerifyOpLog(entries), "crytographic signature invalid") // XXX: This is the expected error message for the current impl logic. This could be improved.
+	assert.EqualError(VerifyOpLog(entries), "crytographic signature invalid") // TODO: This is the expected error message for the current impl logic. This could be improved.
 
 	entries = loadTestLogEntries(t, "testdata/log_invalid_nullification_too_slow.json")
 	assert.ErrorContains(VerifyOpLog(entries), "cannot nullify op after 72h")
@@ -137,7 +137,7 @@ func TestAuditLogInvalidTombstoneUpdate(t *testing.T) {
 	assert := assert.New(t)
 
 	entries := loadTestLogEntries(t, "testdata/log_invalid_update_tombstoned.json")
-	assert.EqualError(VerifyOpLog(entries), "no keys to verify against") // // XXX: This is the expected error message for the current impl logic. This could be improved.
+	assert.EqualError(VerifyOpLog(entries), "no keys to verify against") // TODO: This is the expected error message for the current impl logic. This could be improved.
 }
 
 func TestCreatePLC(t *testing.T) {
