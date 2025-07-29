@@ -79,7 +79,7 @@ func (lvc *logValidationContext) GetValidationContext(did string, cidStr string)
 // This could happen due to an implementation bug, or if an invalid prevStatus is passed
 // (one not produced by an earlier call to GetValidationContext).
 func (lvc *logValidationContext) CommitValidOperation(did string, head string, prevStatus *opStatus, op Operation, createdAt time.Time, keyIndex int) error {
-	this_cid := op.CID().String() // CID() involves expensive-ish serialisation/hashing, best to keep out of the critical section
+	thisCid := op.CID().String() // CID() involves expensive-ish serialisation/hashing, best to keep out of the critical section
 
 	lvc.lock.Lock()
 	defer lvc.lock.Unlock()
@@ -128,11 +128,11 @@ func (lvc *logValidationContext) CommitValidOperation(did string, head string, p
 			}
 		}
 		prevStatus.AllowedKeys = prevStatus.AllowedKeys[:keyIndex]
-		prevStatus.LastChild = this_cid
+		prevStatus.LastChild = thisCid
 		lvc.opStatus[op.PrevCIDStr()] = prevStatus // prevStatus was a copy so we need to write it back
 	}
-	lvc.head[did] = this_cid
-	lvc.opStatus[this_cid] = &opStatus{
+	lvc.head[did] = thisCid
+	lvc.opStatus[thisCid] = &opStatus{
 		DID:         did,
 		CreatedAt:   createdAt,
 		Nullified:   false,
@@ -144,11 +144,11 @@ func (lvc *logValidationContext) CommitValidOperation(did string, head string, p
 
 // Recurses if more than one op needs to be nullified (if the nullified op has descendents)
 // Note: lvc.lock is expected to be held by caller
-func (lvc *logValidationContext) markNullifiedOp(did string, cid string) error {
-	if cid == "" {
+func (lvc *logValidationContext) markNullifiedOp(did string, cidStr string) error {
+	if cidStr == "" {
 		return nil
 	}
-	op := lvc.opStatus[cid]
+	op := lvc.opStatus[cidStr]
 	if op == nil { // this *should* be unreachable
 		return errLogValidationUnrecoverableInternalError
 	}
