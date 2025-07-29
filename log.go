@@ -1,6 +1,7 @@
 package didplc
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -9,10 +10,11 @@ import (
 )
 
 type opStatus struct {
-	CreatedAt   time.Time // the only immutable field here
+	DID         string
+	CreatedAt   time.Time // fields below this line may be mutated
 	Nullified   bool
-	LastChild   string // CID
-	AllowedKeys []string
+	LastChild   string   // CID
+	AllowedKeys []string // the set of public did:keys currently allowed to update from this op
 }
 
 // Note: logValidationContext is designed such that it could later be turned into an interface,
@@ -24,20 +26,29 @@ type logValidationContext struct {
 	lock     sync.RWMutex
 }
 
-func (c *logValidationContext) GetValidationContext(did string, cid string) (string, *opStatus, error) {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
+var errLogValidationUnrecoverableInternalError = errors.New("logValidationContext internal state has become inconsistent. This is very bad and should be impossible")
 
-	head, exists := c.head[did]
+// Retrieve the information required to validate a signature for a particular operation, where `cidStr`
+// corresponds to the `prev` field of the operation you're trying to validate.
+// If you're validating a genesis op (where prev==nil), pass cidStr==""
+// This method may also be used to inspect the nullification status and/or createdAt timestamp for a particular op (by did+cid)
+func (lvc *logValidationContext) GetValidationContext(did string, cidStr string) (string, *opStatus, error) {
+	lvc.lock.RLock()
+	defer lvc.lock.RUnlock()
+
+	head, exists := lvc.head[did]
 	if !exists {
-		if cid != "" {
+		if cidStr != "" {
 			return "", nil, fmt.Errorf("DID not found")
 		}
 		return head, nil, nil // Not an error condition! just means DID is not created yet
 	}
-	status := c.opStatus[cid]
+	status := lvc.opStatus[cidStr]
 	if status == nil {
 		return "", nil, fmt.Errorf("CID not found")
+	}
+	if status.DID != did {
+		return "", nil, fmt.Errorf("op belongs to a different DID")
 	}
 
 	// make a deep copy of the status struct so that concurrent mutations are safe
@@ -48,13 +59,23 @@ func (c *logValidationContext) GetValidationContext(did string, cid string) (str
 	return head, &statusCopy, nil
 }
 
-func (c *logValidationContext) CommitValidOperation(did string, head string, prevStatus *opStatus, op Operation, createdAt time.Time, keyIndex int) error {
+// `head` and `prevStatus` MUST be values that were returned from a previous call to GetValidationContext, with the same `did`.
+// The caller is responsible for syntax validation and signature verification of the Operation.
+// CommitValidOperation will ensure that:
+//  1. If this is the first operation for a particular DID, it must be a genesis operation
+//  2. Else, it must not be a genesis operation.
+//  3. The passed `createdAt` timestamp is greater than that of the current `head` op
+//  4. If the operation nullifies a previous operation, the nullified op is less than (or exactly equal to) 72h old
+//  5. This DID has not been updated since the corresponding GetValidationContext call
+//
+// Additionally, the lvc head+opStatus maps are updated to reflect the changes (including updating nullification status if applicable).
+func (lvc *logValidationContext) CommitValidOperation(did string, head string, prevStatus *opStatus, op Operation, createdAt time.Time, keyIndex int) error {
 	this_cid := op.CID().String() // CID() involves expensive-ish serialisation/hashing, best to keep out of the critical section
 
-	c.lock.Lock()
-	defer c.lock.Unlock()
+	lvc.lock.Lock()
+	defer lvc.lock.Unlock()
 
-	if head != c.head[did] {
+	if head != lvc.head[did] {
 		return fmt.Errorf("head CID mismatch")
 	}
 	if head == "" {
@@ -76,22 +97,26 @@ func (c *logValidationContext) CommitValidOperation(did string, head string, pre
 			if createdAt.Sub(prevStatus.CreatedAt) <= 0 {
 				return fmt.Errorf("invalid operation timestamp order")
 			}
-		} else { // this is a nullification - prevStatus.LastChild is the CID of the op being nullified
+		} else { // this is a nullification. prevStatus.LastChild is the CID of the op being nullified
 			// note: prevStatus != c.opStatus[head]
-			if createdAt.Sub(c.opStatus[head].CreatedAt) <= 0 {
+			if createdAt.Sub(lvc.opStatus[head].CreatedAt) <= 0 {
 				return fmt.Errorf("invalid operation timestamp order")
 			}
-			if createdAt.Sub(c.opStatus[prevStatus.LastChild].CreatedAt) > 72*time.Hour {
+			if createdAt.Sub(lvc.opStatus[prevStatus.LastChild].CreatedAt) > 72*time.Hour {
 				return fmt.Errorf("cannot nullify op after 72h (%s - %s = %s)", createdAt, prevStatus.CreatedAt, createdAt.Sub(prevStatus.CreatedAt))
 			}
-			c.markNullifiedOp(prevStatus.LastChild) // recursive
+			err := lvc.markNullifiedOp(did, prevStatus.LastChild) // recursive
+			if err != nil {
+				return err // should never happen
+			}
 		}
 		prevStatus.AllowedKeys = prevStatus.AllowedKeys[:keyIndex]
 		prevStatus.LastChild = this_cid
-		c.opStatus[op.PrevCIDStr()] = prevStatus // prevStatus was a copy so we need to write it back
+		lvc.opStatus[op.PrevCIDStr()] = prevStatus // prevStatus was a copy so we need to write it back
 	}
-	c.head[did] = this_cid
-	c.opStatus[this_cid] = &opStatus{
+	lvc.head[did] = this_cid
+	lvc.opStatus[this_cid] = &opStatus{
+		DID:         did,
 		CreatedAt:   createdAt,
 		Nullified:   false,
 		LastChild:   "",
@@ -100,19 +125,24 @@ func (c *logValidationContext) CommitValidOperation(did string, head string, pre
 	return nil
 }
 
-func (c *logValidationContext) markNullifiedOp(cid string) {
+// Recurses if more than one op needs to be nullified (if the nullified op has descendents)
+// Note: lvc.lock is expected to be held by caller
+func (lvc *logValidationContext) markNullifiedOp(did string, cid string) error {
 	if cid == "" {
-		return
+		return nil
 	}
-	op := c.opStatus[cid]
-	if op == nil {
-		panic("cid lookup failed during op nullification")
+	op := lvc.opStatus[cid]
+	if op == nil { // this *should* be unreachable
+		return errLogValidationUnrecoverableInternalError
+	}
+	if op.DID != did { // likewise
+		return errLogValidationUnrecoverableInternalError
 	}
 	if op.Nullified {
-		return
+		return nil
 	}
 	op.Nullified = true
-	c.markNullifiedOp(op.LastChild)
+	return lvc.markNullifiedOp(did, op.LastChild)
 }
 
 type LogEntry struct {
