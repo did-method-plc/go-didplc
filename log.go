@@ -28,6 +28,13 @@ type logValidationContext struct {
 
 var errLogValidationUnrecoverableInternalError = errors.New("logValidationContext internal state has become inconsistent. This is very bad and should be impossible")
 
+func NewLogValidationContext() *logValidationContext {
+	return &logValidationContext{
+		head:     make(map[string]string),
+		opStatus: make(map[string]*opStatus),
+	}
+}
+
 // Retrieve the information required to validate a signature for a particular operation, where `cidStr`
 // corresponds to the `prev` field of the operation you're trying to validate.
 // If you're validating a genesis op (i.e. prev==nil), pass cidStr==""
@@ -206,10 +213,7 @@ func VerifyOpLog(entries []LogEntry) error {
 	}
 
 	did := entries[0].DID
-	vctx := logValidationContext{
-		head:     make(map[string]string),
-		opStatus: make(map[string]*opStatus),
-	}
+	lvc := NewLogValidationContext()
 
 	for _, oe := range entries {
 		if oe.DID != did {
@@ -232,7 +236,7 @@ func VerifyOpLog(entries []LogEntry) error {
 		}
 		timestamp := datetime.Time()
 
-		head, prevStatus, err := vctx.GetValidationContext(did, op.PrevCIDStr())
+		head, prevStatus, err := lvc.GetValidationContext(did, op.PrevCIDStr())
 		if err != nil {
 			return err
 		}
@@ -255,7 +259,7 @@ func VerifyOpLog(entries []LogEntry) error {
 		if err != nil {
 			return err
 		}
-		err = vctx.CommitValidOperation(did, head, prevStatus, op, timestamp, keyIdx)
+		err = lvc.CommitValidOperation(did, head, prevStatus, op, timestamp, keyIdx)
 		if err != nil {
 			return err
 		}
@@ -269,7 +273,7 @@ func VerifyOpLog(entries []LogEntry) error {
 				return fmt.Errorf("genesis op cannot be nullified")
 			}
 		}
-		_, status, err := vctx.GetValidationContext(did, oe.CID)
+		_, status, err := lvc.GetValidationContext(did, oe.CID)
 		if err != nil {
 			return err
 		}
