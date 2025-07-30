@@ -47,13 +47,13 @@ func TestExportLogEntryValidate(t *testing.T) {
 
 	assert := assert.New(t)
 
-	known_bad_cids_list, err := loadJSONStringArray("testdata/known_bad_cids.json")
+	knownBadCIDsList, err := loadJSONStringArray("testdata/known_bad_cids.json")
 	if err != nil {
 		t.Fatal(err)
 	}
-	is_known_bad_cid := make(map[string]bool)
-	for _, cid := range known_bad_cids_list {
-		is_known_bad_cid[cid] = true
+	isKnownBadCID := make(map[string]bool)
+	for _, cidStr := range knownBadCIDsList {
+		isKnownBadCID[cidStr] = true
 	}
 
 	// "out.jsonlines" is data from `plc.directory/export`
@@ -75,7 +75,7 @@ func TestExportLogEntryValidate(t *testing.T) {
 			for line := range lines {
 				var entry LogEntry
 				assert.NoError(json.Unmarshal(line, &entry))
-				if is_known_bad_cid[entry.CID] {
+				if isKnownBadCID[entry.CID] {
 					// we expect this to fail
 					assert.Error(entry.Validate(), entry.DID+" "+entry.CID)
 				} else {
@@ -132,13 +132,13 @@ func TestExportAuditLogEntryValidate(t *testing.T) {
 
 	assert := assert.New(t)
 
-	known_bad_dids_list, err := loadJSONStringArray("testdata/known_bad_dids.json")
+	knownBadDIDsList, err := loadJSONStringArray("testdata/known_bad_dids.json")
 	if err != nil {
 		t.Fatal(err)
 	}
-	is_known_bad_did := make(map[string]bool)
-	for _, did := range known_bad_dids_list {
-		is_known_bad_did[did] = true
+	isKnownBadDID := make(map[string]bool)
+	for _, did := range knownBadDIDsList {
+		isKnownBadDID[did] = true
 	}
 
 	f, err := os.Open("../plc_scrape/plc_audit_log.jsonlines")
@@ -159,15 +159,15 @@ func TestExportAuditLogEntryValidate(t *testing.T) {
 			for line := range lines {
 				var entries []LogEntry
 				assert.NoError(json.Unmarshal(line, &entries))
-				this_did := entries[0].DID
-				if is_known_bad_did[this_did] {
+				thisDID := entries[0].DID
+				if isKnownBadDID[thisDID] {
 					// we expect this to fail
-					assert.Error(VerifyOpLog(entries), this_did)
+					assert.Error(VerifyOpLog(entries), thisDID)
 				} else {
 					// we expect this to not fail
-					assert.NoError(VerifyOpLog(entries), this_did)
+					assert.NoError(VerifyOpLog(entries), thisDID)
 				}
-				progressDIDs <- this_did
+				progressDIDs <- thisDID
 			}
 		}()
 	}

@@ -28,7 +28,7 @@ type logValidationContext struct {
 
 var errLogValidationUnrecoverableInternalError = errors.New("logValidationContext internal state has become inconsistent. This is very bad and should be impossible")
 
-func NewLogValidationContext() *logValidationContext {
+func newLogValidationContext() *logValidationContext {
 	return &logValidationContext{
 		head:     make(map[string]string),
 		opStatus: make(map[string]*opStatus),
@@ -52,7 +52,7 @@ func (lvc *logValidationContext) GetValidationContext(did string, cidStr string)
 		if cidStr != "" {
 			return "", nil, fmt.Errorf("DID not found")
 		}
-		return head, nil, nil // Not an error condition! just means DID is not created yet
+		return "", nil, nil // Not an error condition! just means DID is not created yet
 	}
 	status := lvc.opStatus[cidStr]
 	if status == nil {
@@ -213,7 +213,7 @@ func VerifyOpLog(entries []LogEntry) error {
 	}
 
 	did := entries[0].DID
-	lvc := NewLogValidationContext()
+	lvc := newLogValidationContext()
 
 	for _, oe := range entries {
 		if oe.DID != did {
