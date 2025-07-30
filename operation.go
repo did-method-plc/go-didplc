@@ -34,6 +34,11 @@ type Operation interface {
 	VerifySignature(pub crypto.PublicKey) error
 	// returns a DID doc
 	Doc(did string) (Doc, error)
+	// logical equivalent of RotationKeys for any op type
+	// ({RecoveryKey, SigningKey} for legacy genesis, empty slice for Tombstone)
+	EquivalentRotationKeys() []string
+	// CID of the previous operation ("" for genesis ops)
+	PrevCIDStr() string
 }
 
 type OpService struct {
@@ -173,8 +178,15 @@ func verifySigOp(op Operation, pub crypto.PublicKey, sig *string) error {
 	if sig == nil || *sig == "" {
 		return fmt.Errorf("can't verify empty signature")
 	}
+
+	// this check is required because .Strict() alone is not strict enough.
+	// see https://pkg.go.dev/encoding/base64#Encoding.Strict
+	if strings.Contains(*sig, "\r") || strings.Contains(*sig, "\n") {
+		return fmt.Errorf("invalid signature encoding (CRLF)")
+	}
+
 	b := op.UnsignedCBORBytes()
-	sigBytes, err := base64.RawURLEncoding.DecodeString(*sig)
+	sigBytes, err := base64.RawURLEncoding.Strict().DecodeString(*sig)
 	if err != nil {
 		return err
 	}
@@ -182,24 +194,25 @@ func verifySigOp(op Operation, pub crypto.PublicKey, sig *string) error {
 }
 
 // parsing errors are not ignored (will be returned immediately if found)
-func VerifySignatureAny(op Operation, didKeys []string) error {
+// on success, the index of the first key that was able to validate the signature is returned
+func VerifySignatureAny(op Operation, didKeys []string) (int, error) {
 	if len(didKeys) == 0 {
-		return fmt.Errorf("no keys to verify against")
+		return -1, fmt.Errorf("no keys to verify against")
 	}
-	for _, dk := range didKeys {
+	for idx, dk := range didKeys {
 		pub, err := crypto.ParsePublicDIDKey(dk)
 		if err != nil {
-			return err
+			return -1, err
 		}
 		err = op.VerifySignature(pub)
-		if err != crypto.ErrInvalidSignature {
-			return err
-		}
 		if nil == err {
-			return nil
+			return idx, nil
+		}
+		if err != crypto.ErrInvalidSignature {
+			return -1, err
 		}
 	}
-	return crypto.ErrInvalidSignature
+	return -1, crypto.ErrInvalidSignature
 }
 
 func (op *RegularOp) VerifySignature(pub crypto.PublicKey) error {
@@ -235,6 +248,17 @@ func (op *RegularOp) Doc(did string) (Doc, error) {
 		Service:            svc,
 	}
 	return doc, nil
+}
+
+func (op *RegularOp) EquivalentRotationKeys() []string {
+	return op.RotationKeys
+}
+
+func (op *RegularOp) PrevCIDStr() string {
+	if op.Prev == nil {
+		return ""
+	}
+	return *op.Prev
 }
 
 func (op *LegacyOp) CID() cid.Cid {
@@ -328,7 +352,7 @@ func (op *LegacyOp) Doc(did string) (Doc, error) {
 // converts a legacy "create" op to an (unsigned) "plc_operation"
 func (op *LegacyOp) RegularOp() RegularOp {
 	return RegularOp{
-		RotationKeys: []string{op.RecoveryKey},
+		RotationKeys: op.EquivalentRotationKeys(),
 		VerificationMethods: map[string]string{
 			"atproto": op.SigningKey,
 		},
@@ -342,6 +366,17 @@ func (op *LegacyOp) RegularOp() RegularOp {
 		Prev: nil, // always a create
 		Sig:  nil, // don't have private key
 	}
+}
+
+func (op *LegacyOp) EquivalentRotationKeys() []string {
+	return []string{op.RecoveryKey, op.SigningKey}
+}
+
+func (op *LegacyOp) PrevCIDStr() string {
+	if op.Prev == nil {
+		return ""
+	}
+	return *op.Prev
 }
 
 func (op *TombstoneOp) CID() cid.Cid {
@@ -396,6 +431,14 @@ func (op *TombstoneOp) VerifySignature(pub crypto.PublicKey) error {
 
 func (op *TombstoneOp) Doc(did string) (Doc, error) {
 	return Doc{}, fmt.Errorf("tombstones do not have a DID document representation")
+}
+
+func (op *TombstoneOp) EquivalentRotationKeys() []string {
+	return []string{}
+}
+
+func (op *TombstoneOp) PrevCIDStr() string {
+	return op.Prev
 }
 
 func (o *OpEnum) MarshalJSON() ([]byte, error) {
