@@ -76,8 +76,15 @@ func main() {
 		},
 		{
 			Name:   "keygen",
-			Usage:  "generate a fresh k256 private key, printed to stdout as a multibase string",
+			Usage:  "generate a fresh private key, printed to stdout as a multibase string",
 			Action: runKeyGen,
+			Flags: []cli.Flag{
+				&cli.StringFlag{
+					Name:  "type",
+					Usage: "key type; one of 'K-256' or 'P-256'",
+					Value: "K-256",
+				},
+			},
 		},
 		{
 			Name:   "derive_pubkey",
@@ -282,14 +289,23 @@ func runVerify(cctx *cli.Context) error {
 }
 
 func runKeyGen(cctx *cli.Context) error {
-	// TODO: support P256 also
-	privkey, err := crypto.GeneratePrivateKeyK256()
-	if err != nil {
-		return err
+	t := cctx.String("type")
+	switch t {
+	case "K-256", "K256", "k256":
+		privkey, err := crypto.GeneratePrivateKeyK256()
+		if err != nil {
+			return err
+		}
+		fmt.Println(privkey.Multibase())
+	case "P-256", "P256", "p256":
+		privkey, err := crypto.GeneratePrivateKeyP256()
+		if err != nil {
+			return err
+		}
+		fmt.Println(privkey.Multibase())
+	default:
+		return fmt.Errorf("unknown key type: %s", t)
 	}
-
-	fmt.Println(privkey.Multibase())
-
 	return nil
 }
 
