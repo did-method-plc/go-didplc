@@ -12,7 +12,9 @@ import (
 	"strings"
 )
 
-// the zero-value of this client is fully functional
+// Simple HTTP API client for interacting with a PLC directory. This client only fetches and submits data; it does not validate operations.
+//
+// The zero-value of this client is fully functional.
 type Client struct {
 	DirectoryURL string
 	UserAgent    string
@@ -69,6 +71,7 @@ func (c *Client) directoryGET(ctx context.Context, path string) (*http.Response,
 	return resp, nil
 }
 
+// Resolves a DID to DID document against the directory, via a simple fetch. Does not fetch or validate opeation history.
 func (c *Client) Resolve(ctx context.Context, did string) (*Doc, error) {
 	if !strings.HasPrefix(did, "did:plc:") {
 		return nil, fmt.Errorf("expected a did:plc, got: %s", did)
@@ -86,6 +89,7 @@ func (c *Client) Resolve(ctx context.Context, did string) (*Doc, error) {
 	return &doc, nil
 }
 
+// Submits an operation to the directory via HTTP POST.
 func (c *Client) Submit(ctx context.Context, did string, op Operation) error {
 	if !strings.HasPrefix(did, "did:plc:") {
 		return fmt.Errorf("expected a did:plc, got: %s", did)
@@ -126,6 +130,7 @@ func (c *Client) Submit(ctx context.Context, did string, op Operation) error {
 	return nil
 }
 
+// Fetches the active (non-audit) operation log for the indicated DID.
 func (c *Client) OpLog(ctx context.Context, did string) ([]OpEnum, error) {
 	if !strings.HasPrefix(did, "did:plc:") {
 		return nil, fmt.Errorf("expected a did:plc, got: %s", did)
@@ -143,6 +148,7 @@ func (c *Client) OpLog(ctx context.Context, did string) ([]OpEnum, error) {
 	return entries, nil
 }
 
+// Fetches the full audit log for a DID, which includes any non-active operations, as well as timestamps for each operation.
 func (c *Client) AuditLog(ctx context.Context, did string) ([]LogEntry, error) {
 	if !strings.HasPrefix(did, "did:plc:") {
 		return nil, fmt.Errorf("expected a did:plc, got: %s", did)

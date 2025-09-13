@@ -15,6 +15,7 @@ import (
 	cbor "github.com/ipfs/go-ipld-cbor"
 )
 
+// Interface implemented by all operation types.
 type Operation interface {
 	// CID of the full (signed) operation
 	CID() cid.Cid
@@ -46,6 +47,7 @@ type OpService struct {
 	Endpoint string `json:"endpoint" cborgen:"endpoint"`
 }
 
+// Represents normal operation under the current version of the PLC specification.
 type RegularOp struct {
 	// Type is "plc_operation"
 	Type                string               `json:"type" cborgen:"type"`
@@ -57,6 +59,7 @@ type RegularOp struct {
 	Sig                 *string              `json:"sig,omitempty" cborgen:"sig,omitempty" refmt:"sig,omitempty"`
 }
 
+// Represents a "tombstone" operation, which indicates that the DID has been deleted.
 type TombstoneOp struct {
 	// Type is "plc_tombstone"
 	Type string  `json:"type" cborgen:"type"`
@@ -64,6 +67,7 @@ type TombstoneOp struct {
 	Sig  *string `json:"sig,omitempty" cborgen:"sig,omitempty" refmt:"sig,omitempty"`
 }
 
+// Represents a valid operation from an earlier version of the PLC specification.
 type LegacyOp struct {
 	// Type is "create"
 	Type        string  `json:"type" cborgen:"type"`
@@ -79,7 +83,7 @@ var _ Operation = (*RegularOp)(nil)
 var _ Operation = (*TombstoneOp)(nil)
 var _ Operation = (*LegacyOp)(nil)
 
-// any of: Op, TombstoneOp, or LegacyOp
+// A concrete type representing a single operation, which is one of [Op], [TombstoneOp], or [LegacyOp].
 type OpEnum struct {
 	Regular   *RegularOp
 	Tombstone *TombstoneOp

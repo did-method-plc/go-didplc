@@ -204,9 +204,9 @@ func (le *LogEntry) Validate() error {
 	return nil
 }
 
-// checks and ordered list of operations for a single DID.
+// Verifies an ordered list of audit log  operations for a single DID.
 //
-// can be a full audit log (with nullified entries), or a simple log (only "active" entries)
+// Can be a full audit log (with nullified entries), or a simple log (only "active" entries).
 func VerifyOpLog(entries []LogEntry) error {
 	if len(entries) == 0 {
 		return fmt.Errorf("can't verify empty operation log")
