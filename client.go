@@ -10,8 +10,6 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
-
-	"github.com/bluesky-social/indigo/atproto/crypto"
 )
 
 // the zero-value of this client is fully functional
@@ -19,7 +17,6 @@ type Client struct {
 	DirectoryURL string
 	UserAgent    string
 	HTTPClient   http.Client
-	RotationKey  *crypto.PrivateKey
 }
 
 var (
