@@ -13,6 +13,7 @@ type DocService struct {
 	ServiceEndpoint string `json:"serviceEndpoint"`
 }
 
+// Struct representing a complete DID document, with the fields relevant to DID PLC.
 type Doc struct {
 	ID                 string                  `json:"id"`
 	AlsoKnownAs        []string                `json:"alsoKnownAs"`

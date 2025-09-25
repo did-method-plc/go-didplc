@@ -12,13 +12,13 @@ import (
 	"github.com/bluesky-social/indigo/atproto/syntax"
 	"github.com/did-method-plc/go-didplc"
 
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli/v3"
 )
 
 const PLCLI_USER_AGENT = "go-didplc/plcli"
 
 func main() {
-	app := cli.App{
+	app := cli.Command{
 		Name:  "plcli",
 		Usage: "simple CLI client tool for PLC operations",
 	}
@@ -27,7 +27,7 @@ func main() {
 			Name:    "plc-host",
 			Usage:   "method, hostname, and port of PLC registry",
 			Value:   "https://plc.directory",
-			EnvVars: []string{"PLC_HOST"},
+			Sources: cli.EnvVars("PLC_HOST"),
 		},
 	}
 	app.Commands = []*cli.Command{
@@ -46,7 +46,7 @@ func main() {
 				&cli.StringFlag{
 					Name:    "plc-private-rotation-key",
 					Usage:   "private key used as a rotation key, if operation is not signed (multibase syntax)",
-					EnvVars: []string{"PLC_PRIVATE_ROTATION_KEY"},
+					Sources: cli.EnvVars("PLC_PRIVATE_ROTATION_KEY"),
 				},
 			},
 		},
@@ -76,8 +76,15 @@ func main() {
 		},
 		{
 			Name:   "keygen",
-			Usage:  "generate a fresh k256 private key, printed to stdout as a multibase string",
+			Usage:  "generate a fresh private key, printed to stdout as a multibase string",
 			Action: runKeyGen,
+			Flags: []cli.Flag{
+				&cli.StringFlag{
+					Name:  "type",
+					Usage: "key type; one of 'K-256' or 'P-256'",
+					Value: "K-256",
+				},
+			},
 		},
 		{
 			Name:   "derive_pubkey",
@@ -87,19 +94,18 @@ func main() {
 				&cli.StringFlag{
 					Name:    "plc-private-rotation-key",
 					Usage:   "private key used as input (multibase syntax)",
-					EnvVars: []string{"PLC_PRIVATE_ROTATION_KEY"},
+					Sources: cli.EnvVars("PLC_PRIVATE_ROTATION_KEY"),
 				},
 			},
 		},
 	}
 	h := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})
 	slog.SetDefault(slog.New(h))
-	app.RunAndExitOnError()
+	app.Run(context.Background(), os.Args)
 }
 
-func runResolve(cctx *cli.Context) error {
-	ctx := context.Background()
-	s := cctx.Args().First()
+func runResolve(ctx context.Context, cmd *cli.Command) error {
+	s := cmd.Args().First()
 	if s == "" {
 		fmt.Println("need to provide DID as an argument")
 		os.Exit(-1)
@@ -112,7 +118,7 @@ func runResolve(cctx *cli.Context) error {
 	}
 
 	c := didplc.Client{
-		DirectoryURL: cctx.String("plc-host"),
+		DirectoryURL: cmd.String("plc-host"),
 		UserAgent:    PLCLI_USER_AGENT,
 	}
 	doc, err := c.Resolve(ctx, did.String())
@@ -127,11 +133,10 @@ func runResolve(cctx *cli.Context) error {
 	return nil
 }
 
-func runSubmit(cctx *cli.Context) error {
-	ctx := context.Background()
+func runSubmit(ctx context.Context, cmd *cli.Command) error {
 
 	c := didplc.Client{
-		DirectoryURL: cctx.String("plc-host"),
+		DirectoryURL: cmd.String("plc-host"),
 		UserAgent:    PLCLI_USER_AGENT,
 	}
 
@@ -145,7 +150,7 @@ func runSubmit(cctx *cli.Context) error {
 	}
 	op := enum.AsOperation()
 
-	s := cctx.Args().First()
+	s := cmd.Args().First()
 	var did_string string
 	if s == "" {
 		if !op.IsGenesis() {
@@ -163,7 +168,7 @@ func runSubmit(cctx *cli.Context) error {
 	}
 
 	if !op.IsSigned() {
-		privStr := cctx.String("plc-private-rotation-key")
+		privStr := cmd.String("plc-private-rotation-key")
 		if privStr == "" {
 			return fmt.Errorf("operation is not signed and no privte key provided")
 		}
@@ -192,9 +197,8 @@ func runSubmit(cctx *cli.Context) error {
 	return nil
 }
 
-func fetchOplog(cctx *cli.Context) ([]didplc.OpEnum, error) {
-	ctx := context.Background()
-	s := cctx.Args().First()
+func fetchOplog(ctx context.Context, cmd *cli.Command) ([]didplc.OpEnum, error) {
+	s := cmd.Args().First()
 	if s == "" {
 		return nil, fmt.Errorf("need to provide DID as an argument")
 	}
@@ -205,7 +209,7 @@ func fetchOplog(cctx *cli.Context) ([]didplc.OpEnum, error) {
 	}
 
 	c := didplc.Client{
-		DirectoryURL: cctx.String("plc-host"),
+		DirectoryURL: cmd.String("plc-host"),
 		UserAgent:    PLCLI_USER_AGENT,
 	}
 	entries, err := c.OpLog(ctx, did.String())
@@ -215,8 +219,8 @@ func fetchOplog(cctx *cli.Context) ([]didplc.OpEnum, error) {
 	return entries, nil
 }
 
-func runOpLog(cctx *cli.Context) error {
-	entries, err := fetchOplog(cctx)
+func runOpLog(ctx context.Context, cmd *cli.Command) error {
+	entries, err := fetchOplog(ctx, cmd)
 	if err != nil {
 		return err
 	}
@@ -229,9 +233,8 @@ func runOpLog(cctx *cli.Context) error {
 	return nil
 }
 
-func fetchAuditlog(cctx *cli.Context) ([]didplc.LogEntry, error) {
-	ctx := context.Background()
-	s := cctx.Args().First()
+func fetchAuditlog(ctx context.Context, cmd *cli.Command) ([]didplc.LogEntry, error) {
+	s := cmd.Args().First()
 	if s == "" {
 		return nil, fmt.Errorf("need to provide DID as an argument")
 	}
@@ -242,7 +245,7 @@ func fetchAuditlog(cctx *cli.Context) ([]didplc.LogEntry, error) {
 	}
 
 	c := didplc.Client{
-		DirectoryURL: cctx.String("plc-host"),
+		DirectoryURL: cmd.String("plc-host"),
 		UserAgent:    PLCLI_USER_AGENT,
 	}
 	entries, err := c.AuditLog(ctx, did.String())
@@ -252,8 +255,8 @@ func fetchAuditlog(cctx *cli.Context) ([]didplc.LogEntry, error) {
 	return entries, nil
 }
 
-func runAuditLog(cctx *cli.Context) error {
-	entries, err := fetchAuditlog(cctx)
+func runAuditLog(ctx context.Context, cmd *cli.Command) error {
+	entries, err := fetchAuditlog(ctx, cmd)
 	if err != nil {
 		return err
 	}
@@ -266,8 +269,8 @@ func runAuditLog(cctx *cli.Context) error {
 	return nil
 }
 
-func runVerify(cctx *cli.Context) error {
-	entries, err := fetchAuditlog(cctx)
+func runVerify(ctx context.Context, cmd *cli.Command) error {
+	entries, err := fetchAuditlog(ctx, cmd)
 	if err != nil {
 		return err
 	}
@@ -281,20 +284,29 @@ func runVerify(cctx *cli.Context) error {
 	return nil
 }
 
-func runKeyGen(cctx *cli.Context) error {
-	// TODO: support P256 also
-	privkey, err := crypto.GeneratePrivateKeyK256()
-	if err != nil {
-		return err
+func runKeyGen(ctx context.Context, cmd *cli.Command) error {
+	t := cmd.String("type")
+	switch t {
+	case "K-256", "K256", "k256":
+		privkey, err := crypto.GeneratePrivateKeyK256()
+		if err != nil {
+			return err
+		}
+		fmt.Println(privkey.Multibase())
+	case "P-256", "P256", "p256":
+		privkey, err := crypto.GeneratePrivateKeyP256()
+		if err != nil {
+			return err
+		}
+		fmt.Println(privkey.Multibase())
+	default:
+		return fmt.Errorf("unknown key type: %s", t)
 	}
-
-	fmt.Println(privkey.Multibase())
-
 	return nil
 }
 
-func runDerivePubkey(cctx *cli.Context) error {
-	privStr := cctx.String("plc-private-rotation-key")
+func runDerivePubkey(ctx context.Context, cmd *cli.Command) error {
+	privStr := cmd.String("plc-private-rotation-key")
 	if privStr == "" {
 		return fmt.Errorf("private key is required")
 	}
