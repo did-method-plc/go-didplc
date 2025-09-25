@@ -204,7 +204,7 @@ func (le *LogEntry) Validate() error {
 	return nil
 }
 
-// Verifies an ordered list of audit log  operations for a single DID.
+// Verifies an ordered list of log operations for a single DID.
 //
 // Can be a full audit log (with nullified entries), or a simple log (only "active" entries).
 func VerifyOpLog(entries []LogEntry) error {

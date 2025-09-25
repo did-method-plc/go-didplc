@@ -67,7 +67,9 @@ type TombstoneOp struct {
 	Sig  *string `json:"sig,omitempty" cborgen:"sig,omitempty" refmt:"sig,omitempty"`
 }
 
-// Represents a valid operation from an earlier version of the PLC specification.
+// Represents a valid legacy operation.
+//
+// New operations should not be created in this legacy format, but existing operations in the directory are still supported by the specification.
 type LegacyOp struct {
 	// Type is "create"
 	Type        string  `json:"type" cborgen:"type"`
