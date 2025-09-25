@@ -6,7 +6,7 @@ import (
 
 	"github.com/bluesky-social/indigo/atproto/crypto"
 
-	cbor "github.com/ipfs/go-ipld-cbor"
+	"github.com/hyphacoop/go-dasl/drisl"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -41,7 +41,7 @@ func TestVerifySignatureHardWay(t *testing.T) {
 		},
 		//"sig": nil,
 	}
-	objBytes, err := cbor.DumpObject(obj)
+	objBytes, err := drisl.Marshal(obj)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +84,7 @@ func TestVerifySignatureHardWayNew(t *testing.T) {
 		},
 		//"sig": nil,
 	}
-	objBytes, err := cbor.DumpObject(obj)
+	objBytes, err := drisl.Marshal(obj)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +94,9 @@ func TestVerifySignatureHardWayNew(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.NoError(pub.HashAndVerify(objBytes, sigBytes))
-	assert.Equal("bafyreih7k7a7v7ez7qzzxj7ywomk5hgtidpzuodjsw2kldtepdadob4hdi", computeCID(objBytes).String())
+	c, err := drisl.CidForValue(obj)
+	assert.NoError(err)
+	assert.Equal("bafyreih7k7a7v7ez7qzzxj7ywomk5hgtidpzuodjsw2kldtepdadob4hdi", c.String())
 }
 
 func TestVerifySignatureLegacyGenesis(t *testing.T) {
@@ -116,7 +118,7 @@ func TestVerifySignatureLegacyGenesis(t *testing.T) {
 		"recoveryKey": "did:key:zQ3shhCGUqDKjStzuDxPkTxN6ujddP4RkEKJJouJGRRkaLGbg",
 		//"sig": nil,
 	}
-	objBytes, err := cbor.DumpObject(obj)
+	objBytes, err := drisl.Marshal(obj)
 	if err != nil {
 		t.Fatal(err)
 	}

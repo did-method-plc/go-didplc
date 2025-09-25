@@ -11,8 +11,8 @@ import (
 
 	"github.com/bluesky-social/indigo/atproto/crypto"
 
-	"github.com/ipfs/go-cid"
-	cbor "github.com/ipfs/go-ipld-cbor"
+	"github.com/hyphacoop/go-dasl/cid"
+	"github.com/hyphacoop/go-dasl/drisl"
 )
 
 type Operation interface {
@@ -42,37 +42,37 @@ type Operation interface {
 }
 
 type OpService struct {
-	Type     string `json:"type" cborgen:"type"`
-	Endpoint string `json:"endpoint" cborgen:"endpoint"`
+	Type     string `json:"type" cbor:"type" cborgen:"type"`
+	Endpoint string `json:"endpoint" cbor:"endpoint" cborgen:"endpoint"`
 }
 
 type RegularOp struct {
 	// Type is "plc_operation"
-	Type                string               `json:"type" cborgen:"type"`
-	RotationKeys        []string             `json:"rotationKeys" cborgen:"rotationKeys"`
-	VerificationMethods map[string]string    `json:"verificationMethods" cborgen:"verificationMethods"`
-	AlsoKnownAs         []string             `json:"alsoKnownAs" cborgen:"alsoKnownAs"`
-	Services            map[string]OpService `json:"services" cborgen:"services"`
-	Prev                *string              `json:"prev" cborgen:"prev"`
-	Sig                 *string              `json:"sig,omitempty" cborgen:"sig,omitempty" refmt:"sig,omitempty"`
+	Type                string               `json:"type" cbor:"type" cborgen:"type"`
+	RotationKeys        []string             `json:"rotationKeys" cbor:"rotationKeys" cborgen:"rotationKeys"`
+	VerificationMethods map[string]string    `json:"verificationMethods" cbor:"verificationMethods" cborgen:"verificationMethods"`
+	AlsoKnownAs         []string             `json:"alsoKnownAs" cbor:"alsoKnownAs" cborgen:"alsoKnownAs"`
+	Services            map[string]OpService `json:"services" cbor:"services" cborgen:"services"`
+	Prev                *string              `json:"prev" cbor:"prev" cborgen:"prev"`
+	Sig                 *string              `json:"sig,omitempty" cbor:"sig,omitempty" cborgen:"sig,omitempty" refmt:"sig,omitempty"`
 }
 
 type TombstoneOp struct {
 	// Type is "plc_tombstone"
-	Type string  `json:"type" cborgen:"type"`
-	Prev string  `json:"prev" cborgen:"prev"`
-	Sig  *string `json:"sig,omitempty" cborgen:"sig,omitempty" refmt:"sig,omitempty"`
+	Type string  `json:"type" cbor:"type" cborgen:"type"`
+	Prev string  `json:"prev" cbor:"prev" cborgen:"prev"`
+	Sig  *string `json:"sig,omitempty" cbor:"sig,omitempty" cborgen:"sig,omitempty" refmt:"sig,omitempty"`
 }
 
 type LegacyOp struct {
 	// Type is "create"
-	Type        string  `json:"type" cborgen:"type"`
-	SigningKey  string  `json:"signingKey" cborgen:"signingKey"`
-	RecoveryKey string  `json:"recoveryKey" cborgen:"recoveryKey"`
-	Handle      string  `json:"handle" cborgen:"handle"`
-	Service     string  `json:"service" cborgen:"service"`
-	Prev        *string `json:"prev" cborgen:"prev"`
-	Sig         *string `json:"sig,omitempty" cborgen:"sig,omitempty" refmt:"sig,omitempty"`
+	Type        string  `json:"type" cbor:"type" cborgen:"type"`
+	SigningKey  string  `json:"signingKey" cbor:"signingKey" cborgen:"signingKey"`
+	RecoveryKey string  `json:"recoveryKey" cbor:"recoveryKey" cborgen:"recoveryKey"`
+	Handle      string  `json:"handle" cbor:"handle" cborgen:"handle"`
+	Service     string  `json:"service" cbor:"service" cborgen:"service"`
+	Prev        *string `json:"prev" cbor:"prev" cborgen:"prev"`
+	Sig         *string `json:"sig,omitempty" cbor:"sig,omitempty" cborgen:"sig,omitempty" refmt:"sig,omitempty"`
 }
 
 var _ Operation = (*RegularOp)(nil)
@@ -89,24 +89,13 @@ type OpEnum struct {
 var ErrNotGenesisOp = errors.New("not a genesis PLC operation")
 var ErrNotSignedOp = errors.New("not a signed PLC operation")
 
-func init() {
-	cbor.RegisterCborType(OpService{})
-	cbor.RegisterCborType(RegularOp{})
-	cbor.RegisterCborType(TombstoneOp{})
-	cbor.RegisterCborType(LegacyOp{})
-}
-
-func computeCID(b []byte) cid.Cid {
-	cidBuilder := cid.V1Builder{Codec: 0x71, MhType: 0x12, MhLength: 0}
-	c, err := cidBuilder.Sum(b)
+func (op *RegularOp) CID() cid.Cid {
+	c, err := drisl.CidForValue(op)
 	if err != nil {
-		return cid.Undef
+		// XXX: change function signature so we don't panic? or return empty CID instead?
+		panic(err)
 	}
 	return c
-}
-
-func (op *RegularOp) CID() cid.Cid {
-	return computeCID(op.SignedCBORBytes())
 }
 
 func (op *RegularOp) UnsignedCBORBytes() []byte {
@@ -120,7 +109,7 @@ func (op *RegularOp) UnsignedCBORBytes() []byte {
 		Sig:                 nil,
 	}
 
-	out, err := cbor.DumpObject(unsigned)
+	out, err := drisl.Marshal(unsigned)
 	if err != nil {
 		return nil
 	}
@@ -128,7 +117,7 @@ func (op *RegularOp) UnsignedCBORBytes() []byte {
 }
 
 func (op *RegularOp) SignedCBORBytes() []byte {
-	out, err := cbor.DumpObject(op)
+	out, err := drisl.Marshal(op)
 	if err != nil {
 		return nil
 	}
@@ -262,7 +251,12 @@ func (op *RegularOp) PrevCIDStr() string {
 }
 
 func (op *LegacyOp) CID() cid.Cid {
-	return computeCID(op.SignedCBORBytes())
+	c, err := drisl.CidForValue(op)
+	if err != nil {
+		// XXX: change function signature so we don't panic? or return empty CID instead?
+		panic(err)
+	}
+	return c
 }
 
 func (op *LegacyOp) UnsignedCBORBytes() []byte {
@@ -275,7 +269,7 @@ func (op *LegacyOp) UnsignedCBORBytes() []byte {
 		Prev:        op.Prev,
 		Sig:         nil,
 	}
-	out, err := cbor.DumpObject(unsigned)
+	out, err := drisl.Marshal(unsigned)
 	if err != nil {
 		return nil
 	}
@@ -283,7 +277,7 @@ func (op *LegacyOp) UnsignedCBORBytes() []byte {
 }
 
 func (op *LegacyOp) SignedCBORBytes() []byte {
-	out, err := cbor.DumpObject(op)
+	out, err := drisl.Marshal(op)
 	if err != nil {
 		return nil
 	}
@@ -380,7 +374,12 @@ func (op *LegacyOp) PrevCIDStr() string {
 }
 
 func (op *TombstoneOp) CID() cid.Cid {
-	return computeCID(op.SignedCBORBytes())
+	c, err := drisl.CidForValue(op)
+	if err != nil {
+		// XXX: change function signature so we don't panic? or return empty CID instead?
+		panic(err)
+	}
+	return c
 }
 
 func (op *TombstoneOp) UnsignedCBORBytes() []byte {
@@ -389,7 +388,7 @@ func (op *TombstoneOp) UnsignedCBORBytes() []byte {
 		Prev: op.Prev,
 		Sig:  nil,
 	}
-	out, err := cbor.DumpObject(unsigned)
+	out, err := drisl.Marshal(unsigned)
 	if err != nil {
 		return nil
 	}
@@ -397,7 +396,7 @@ func (op *TombstoneOp) UnsignedCBORBytes() []byte {
 }
 
 func (op *TombstoneOp) SignedCBORBytes() []byte {
-	out, err := cbor.DumpObject(op)
+	out, err := drisl.Marshal(op)
 	if err != nil {
 		return nil
 	}
