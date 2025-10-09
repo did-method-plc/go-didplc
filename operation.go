@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bluesky-social/indigo/atproto/crypto"
+	"github.com/bluesky-social/indigo/atproto/atcrypto"
 
 	"github.com/ipfs/go-cid"
 	cbor "github.com/ipfs/go-ipld-cbor"
@@ -30,9 +30,9 @@ type Operation interface {
 	// returns the DID for a genesis op (errors if this op is not a genesis op, or is not signed)
 	DID() (string, error)
 	// signs the object in-place
-	Sign(priv crypto.PrivateKey) error
-	// verifiy signature. returns crypto.ErrInvalidSignature if appropriate
-	VerifySignature(pub crypto.PublicKey) error
+	Sign(priv atcrypto.PrivateKey) error
+	// verifiy signature. returns atcrypto.ErrInvalidSignature if appropriate
+	VerifySignature(pub atcrypto.PublicKey) error
 	// returns a DID doc
 	Doc(did string) (Doc, error)
 	// logical equivalent of RotationKeys for any op type
@@ -161,7 +161,7 @@ func (op *RegularOp) DID() (string, error) {
 	return "did:plc:" + strings.ToLower(suffix), nil
 }
 
-func signOp(op Operation, priv crypto.PrivateKey) (string, error) {
+func signOp(op Operation, priv atcrypto.PrivateKey) (string, error) {
 	b := op.UnsignedCBORBytes()
 	sig, err := priv.HashAndSign(b)
 	if err != nil {
@@ -171,7 +171,7 @@ func signOp(op Operation, priv crypto.PrivateKey) (string, error) {
 	return b64, nil
 }
 
-func (op *RegularOp) Sign(priv crypto.PrivateKey) error {
+func (op *RegularOp) Sign(priv atcrypto.PrivateKey) error {
 	sig, err := signOp(op, priv)
 	if err != nil {
 		return err
@@ -180,7 +180,7 @@ func (op *RegularOp) Sign(priv crypto.PrivateKey) error {
 	return nil
 }
 
-func verifySigOp(op Operation, pub crypto.PublicKey, sig *string) error {
+func verifySigOp(op Operation, pub atcrypto.PublicKey, sig *string) error {
 	if sig == nil || *sig == "" {
 		return fmt.Errorf("can't verify empty signature")
 	}
@@ -206,7 +206,7 @@ func VerifySignatureAny(op Operation, didKeys []string) (int, error) {
 		return -1, fmt.Errorf("no keys to verify against")
 	}
 	for idx, dk := range didKeys {
-		pub, err := crypto.ParsePublicDIDKey(dk)
+		pub, err := atcrypto.ParsePublicDIDKey(dk)
 		if err != nil {
 			return -1, err
 		}
@@ -214,14 +214,14 @@ func VerifySignatureAny(op Operation, didKeys []string) (int, error) {
 		if nil == err {
 			return idx, nil
 		}
-		if err != crypto.ErrInvalidSignature {
+		if err != atcrypto.ErrInvalidSignature {
 			return -1, err
 		}
 	}
-	return -1, crypto.ErrInvalidSignature
+	return -1, atcrypto.ErrInvalidSignature
 }
 
-func (op *RegularOp) VerifySignature(pub crypto.PublicKey) error {
+func (op *RegularOp) VerifySignature(pub atcrypto.PublicKey) error {
 	return verifySigOp(op, pub, op.Sig)
 }
 
@@ -236,7 +236,7 @@ func (op *RegularOp) Doc(did string) (Doc, error) {
 	}
 	vm := []DocVerificationMethod{}
 	for name, didKey := range op.VerificationMethods {
-		pub, err := crypto.ParsePublicDIDKey(didKey)
+		pub, err := atcrypto.ParsePublicDIDKey(didKey)
 		if err != nil {
 			return Doc{}, err
 		}
@@ -316,7 +316,7 @@ func (op *LegacyOp) DID() (string, error) {
 	return "did:plc:" + strings.ToLower(suffix), nil
 }
 
-func (op *LegacyOp) Sign(priv crypto.PrivateKey) error {
+func (op *LegacyOp) Sign(priv atcrypto.PrivateKey) error {
 	sig, err := signOp(op, priv)
 	if err != nil {
 		return err
@@ -325,7 +325,7 @@ func (op *LegacyOp) Sign(priv crypto.PrivateKey) error {
 	return nil
 }
 
-func (op *LegacyOp) VerifySignature(pub crypto.PublicKey) error {
+func (op *LegacyOp) VerifySignature(pub atcrypto.PublicKey) error {
 	return verifySigOp(op, pub, op.Sig)
 }
 
@@ -422,7 +422,7 @@ func (op *TombstoneOp) DID() (string, error) {
 	return "", ErrNotGenesisOp
 }
 
-func (op *TombstoneOp) Sign(priv crypto.PrivateKey) error {
+func (op *TombstoneOp) Sign(priv atcrypto.PrivateKey) error {
 	sig, err := signOp(op, priv)
 	if err != nil {
 		return err
@@ -431,7 +431,7 @@ func (op *TombstoneOp) Sign(priv crypto.PrivateKey) error {
 	return nil
 }
 
-func (op *TombstoneOp) VerifySignature(pub crypto.PublicKey) error {
+func (op *TombstoneOp) VerifySignature(pub atcrypto.PublicKey) error {
 	return verifySigOp(op, pub, op.Sig)
 }
 
@@ -485,7 +485,7 @@ func (o *OpEnum) UnmarshalJSON(b []byte) error {
 }
 
 // returns a new signed PLC operation using the provided atproto-specific metdata
-func NewAtproto(priv crypto.PrivateKey, handle string, pdsEndpoint string, rotationKeys []string) (RegularOp, error) {
+func NewAtproto(priv atcrypto.PrivateKey, handle string, pdsEndpoint string, rotationKeys []string) (RegularOp, error) {
 
 	pub, err := priv.PublicKey()
 	if err != nil {

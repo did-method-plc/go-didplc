@@ -4,7 +4,7 @@ import (
 	"encoding/base64"
 	"testing"
 
-	"github.com/bluesky-social/indigo/atproto/crypto"
+	"github.com/bluesky-social/indigo/atproto/atcrypto"
 
 	cbor "github.com/ipfs/go-ipld-cbor"
 	"github.com/stretchr/testify/assert"
@@ -15,7 +15,7 @@ func TestVerifySignatureHardWay(t *testing.T) {
 
 	sig := "n-VWsPZY4xkFN8wlg-kJBU_yzWTNd2oBnbjkjxXu3HdjbBLaEB7K39JHIPn_DZVALKRjts6bUicjSEecZy8eIw"
 	didKey := "did:key:zQ3shP5TBe1sQfSttXty15FAEHV1DZgcxRZNxvEWnPfLFwLxJ"
-	pub, err := crypto.ParsePublicDIDKey(didKey)
+	pub, err := atcrypto.ParsePublicDIDKey(didKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +59,7 @@ func TestVerifySignatureHardWayNew(t *testing.T) {
 
 	sig := "v9rHEhW4XVwMKRSd2yeFgk4-mZthHSZwJ4tShNPqDP4NH3w79CkxIOmJ393D6MEyWZLN1qxS1qBIbFEGtfoDDw"
 	didKey := "did:key:zQ3shcciz4AvrLyDnUdZLpQys3kyCsesojRNzJAieyDStGxGo"
-	pub, err := crypto.ParsePublicDIDKey(didKey)
+	pub, err := atcrypto.ParsePublicDIDKey(didKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +102,7 @@ func TestVerifySignatureLegacyGenesis(t *testing.T) {
 
 	sig := "7QTzqO1BcL3eDzP4P_YBxMmv5U4brHzAItkM9w5o8gZA7ElZkrVYEwsfQCfk5EoWLk58Z1y6fyNP9x1pthJnlw"
 	didKey := "did:key:zQ3shP5TBe1sQfSttXty15FAEHV1DZgcxRZNxvEWnPfLFwLxJ" // signing, not recovery
-	pub, err := crypto.ParsePublicDIDKey(didKey)
+	pub, err := atcrypto.ParsePublicDIDKey(didKey)
 	if err != nil {
 		t.Fatal(err)
 	}
