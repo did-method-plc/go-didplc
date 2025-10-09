@@ -5,7 +5,7 @@ go 1.24
 toolchain go1.24.1
 
 require (
-	github.com/bluesky-social/indigo v0.0.0-20250703203720-0f3058806983
+	github.com/bluesky-social/indigo v0.0.0-20251009212240-20524de167fe
 	github.com/ipfs/go-cid v0.4.1
 	github.com/ipfs/go-ipld-cbor v0.1.0
 	github.com/stretchr/testify v1.10.0

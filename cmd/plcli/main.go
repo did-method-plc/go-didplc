@@ -8,7 +8,7 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/bluesky-social/indigo/atproto/crypto"
+	"github.com/bluesky-social/indigo/atproto/atcrypto"
 	"github.com/bluesky-social/indigo/atproto/syntax"
 	"github.com/did-method-plc/go-didplc"
 
@@ -172,7 +172,7 @@ func runSubmit(ctx context.Context, cmd *cli.Command) error {
 		if privStr == "" {
 			return fmt.Errorf("operation is not signed and no privte key provided")
 		}
-		priv, err := crypto.ParsePrivateMultibase(privStr)
+		priv, err := atcrypto.ParsePrivateMultibase(privStr)
 		if err != nil {
 			return err
 		}
@@ -288,13 +288,13 @@ func runKeyGen(ctx context.Context, cmd *cli.Command) error {
 	t := cmd.String("type")
 	switch t {
 	case "K-256", "K256", "k256":
-		privkey, err := crypto.GeneratePrivateKeyK256()
+		privkey, err := atcrypto.GeneratePrivateKeyK256()
 		if err != nil {
 			return err
 		}
 		fmt.Println(privkey.Multibase())
 	case "P-256", "P256", "p256":
-		privkey, err := crypto.GeneratePrivateKeyP256()
+		privkey, err := atcrypto.GeneratePrivateKeyP256()
 		if err != nil {
 			return err
 		}
@@ -310,7 +310,7 @@ func runDerivePubkey(ctx context.Context, cmd *cli.Command) error {
 	if privStr == "" {
 		return fmt.Errorf("private key is required")
 	}
-	privkey, err := crypto.ParsePrivateMultibase(privStr)
+	privkey, err := atcrypto.ParsePrivateMultibase(privStr)
 	if err != nil {
 		return err
 	}

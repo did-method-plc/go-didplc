@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bluesky-social/indigo/atproto/crypto"
+	"github.com/bluesky-social/indigo/atproto/atcrypto"
 	"github.com/bluesky-social/indigo/atproto/syntax"
 
 	"github.com/stretchr/testify/assert"
@@ -143,7 +143,7 @@ func TestAuditLogInvalidTombstoneUpdate(t *testing.T) {
 func TestCreatePLC(t *testing.T) {
 	assert := assert.New(t)
 
-	priv, err := crypto.GeneratePrivateKeyP256()
+	priv, err := atcrypto.GeneratePrivateKeyP256()
 	if err != nil {
 		t.Fatal(err)
 	}
