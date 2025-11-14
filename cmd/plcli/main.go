@@ -101,7 +101,9 @@ func main() {
 	}
 	h := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})
 	slog.SetDefault(slog.New(h))
-	app.Run(context.Background(), os.Args)
+	if err := app.Run(context.Background(), os.Args); err != nil {
+		fmt.Println("Error:", err)
+	}
 }
 
 func runResolve(ctx context.Context, cmd *cli.Command) error {
