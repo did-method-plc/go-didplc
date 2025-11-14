@@ -103,20 +103,19 @@ func main() {
 	slog.SetDefault(slog.New(h))
 	if err := app.Run(context.Background(), os.Args); err != nil {
 		fmt.Println("Error:", err)
+		os.Exit(-1)
 	}
 }
 
 func runResolve(ctx context.Context, cmd *cli.Command) error {
 	s := cmd.Args().First()
 	if s == "" {
-		fmt.Println("need to provide DID as an argument")
-		os.Exit(-1)
+		return fmt.Errorf("need to provide DID as an argument")
 	}
 
 	did, err := syntax.ParseDID(s)
 	if err != nil {
-		fmt.Println(err)
-		os.Exit(-1)
+		return err
 	}
 
 	c := didplc.Client{
@@ -156,8 +155,7 @@ func runSubmit(ctx context.Context, cmd *cli.Command) error {
 	var did_string string
 	if s == "" {
 		if !op.IsGenesis() {
-			fmt.Println("a DID must be provided as argument for non-genesis ops")
-			os.Exit(-1)
+			return fmt.Errorf("a DID must be provided as argument for non-genesis ops")
 		}
 		// else, did string will be computed after signing
 	} else {
