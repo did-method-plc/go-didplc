@@ -1,6 +1,7 @@
 package didplc
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/base32"
 	"encoding/base64"
@@ -458,6 +459,14 @@ func (o *OpEnum) MarshalJSON() ([]byte, error) {
 	return nil, fmt.Errorf("can't marshal empty OpEnum")
 }
 
+// like json.Unmarshal, but rejecting objects with unknown fields
+// TODO: also require case sensitivity (requires migrating to json/v2)q
+func strictUnmarshal(b []byte, v interface{}) error {
+	decoder := json.NewDecoder(bytes.NewReader(b))
+	decoder.DisallowUnknownFields()
+	return decoder.Decode(v)
+}
+
 func (o *OpEnum) UnmarshalJSON(b []byte) error {
 	var typeMap map[string]interface{}
 	err := json.Unmarshal(b, &typeMap)
@@ -472,13 +481,13 @@ func (o *OpEnum) UnmarshalJSON(b []byte) error {
 	switch typ {
 	case "plc_operation":
 		o.Regular = &RegularOp{}
-		return json.Unmarshal(b, o.Regular)
+		return strictUnmarshal(b, o.Regular)
 	case "create":
 		o.Legacy = &LegacyOp{}
-		return json.Unmarshal(b, o.Legacy)
+		return strictUnmarshal(b, o.Legacy)
 	case "plc_tombstone":
 		o.Tombstone = &TombstoneOp{}
-		return json.Unmarshal(b, o.Tombstone)
+		return strictUnmarshal(b, o.Tombstone)
 	default:
 		return fmt.Errorf("unexpected operation type: %s", typ)
 	}
