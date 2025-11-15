@@ -3,7 +3,7 @@ package didplc
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -83,7 +83,11 @@ func (c *Client) Resolve(ctx context.Context, did string) (*Doc, error) {
 	}
 
 	var doc Doc
-	if err := json.NewDecoder(resp.Body).Decode(&doc); err != nil {
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+	if err := json.Unmarshal(bodyBytes, &doc); err != nil {
 		return nil, fmt.Errorf("failed parse of did:plc document JSON: %w", err)
 	}
 	return &doc, nil
@@ -142,7 +146,11 @@ func (c *Client) OpLog(ctx context.Context, did string) ([]OpEnum, error) {
 	}
 
 	var entries []OpEnum
-	if err := json.NewDecoder(resp.Body).Decode(&entries); err != nil {
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+	if err := json.Unmarshal(bodyBytes, &entries); err != nil {
 		return nil, fmt.Errorf("failed parse of did:plc op log JSON: %w", err)
 	}
 	return entries, nil
@@ -160,7 +168,11 @@ func (c *Client) AuditLog(ctx context.Context, did string) ([]LogEntry, error) {
 	}
 
 	var entries []LogEntry
-	if err := json.NewDecoder(resp.Body).Decode(&entries); err != nil {
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+	if err := json.Unmarshal(bodyBytes, &entries); err != nil {
 		return nil, fmt.Errorf("failed parse of did:plc audit log JSON: %w", err)
 	}
 	return entries, nil
