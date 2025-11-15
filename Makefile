@@ -2,6 +2,8 @@
 SHELL = /bin/bash
 .SHELLFLAGS = -o pipefail -c
 
+export GOEXPERIMENT = jsonv2
+
 .PHONY: help
 help: ## Print info about all commands
 	@echo "Commands:"
