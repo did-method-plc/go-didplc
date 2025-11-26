@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"io"
 	"log/slog"
@@ -16,6 +18,22 @@ import (
 )
 
 const PLCLI_USER_AGENT = "go-didplc/plcli"
+
+func marshalIndent(v interface{}, prefix, indent string) ([]byte, error) {
+	var buf bytes.Buffer
+	enc := jsontext.NewEncoder(&buf, jsontext.WithIndent(indent))
+
+	b, err := json.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := enc.WriteValue(b); err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
+}
 
 func main() {
 	app := cli.Command{
@@ -126,7 +144,7 @@ func runResolve(ctx context.Context, cmd *cli.Command) error {
 	if err != nil {
 		return err
 	}
-	jsonBytes, err := json.MarshalIndent(&doc, "", "  ")
+	jsonBytes, err := marshalIndent(&doc, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -225,7 +243,7 @@ func runOpLog(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	jsonBytes, err := json.MarshalIndent(&entries, "", "  ")
+	jsonBytes, err := marshalIndent(&entries, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -261,7 +279,7 @@ func runAuditLog(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	jsonBytes, err := json.MarshalIndent(&entries, "", "  ")
+	jsonBytes, err := marshalIndent(&entries, "", "  ")
 	if err != nil {
 		return err
 	}
