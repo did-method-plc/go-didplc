@@ -2,6 +2,8 @@ module github.com/did-method-plc/go-didplc
 
 go 1.25
 
+toolchain go1.25.1
+
 require (
 	github.com/bluesky-social/indigo v0.0.0-20251009212240-20524de167fe
 	github.com/ipfs/go-cid v0.4.1
