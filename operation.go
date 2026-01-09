@@ -528,3 +528,25 @@ func (oe *OpEnum) AsOperation() Operation {
 		return nil
 	}
 }
+
+// WrapOperation converts an Operation interface to an OpEnum for marshaling
+func WrapOperation(op Operation) (*OpEnum, error) {
+	if op == nil {
+		return nil, fmt.Errorf("cannot wrap nil operation")
+	}
+
+	opEnum := &OpEnum{}
+
+	switch v := op.(type) {
+	case *RegularOp:
+		opEnum.Regular = v
+	case *LegacyOp:
+		opEnum.Legacy = v
+	case *TombstoneOp:
+		opEnum.Tombstone = v
+	default:
+		return nil, fmt.Errorf("unknown operation type: %T", op)
+	}
+
+	return opEnum, nil
+}
