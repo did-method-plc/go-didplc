@@ -73,12 +73,7 @@ func VerifyOpLog(entries []LogEntry) error {
 		}
 		timestamp := datetime.Time()
 
-		head, prevStatus, err := GetValidationContext(os, did, op.PrevCIDStr())
-		if err != nil {
-			return err
-		}
-
-		po, err := VerifyOperation(os, did, head, prevStatus, op, timestamp)
+		po, err := VerifyOperation(os, did, op, timestamp)
 		if err != nil {
 			return err
 		}

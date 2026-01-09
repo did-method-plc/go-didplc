@@ -41,7 +41,8 @@ type OpStore interface {
 	// CommitOperations atomically commits a batch of prepared operations to the store.
 	// All operations in the batch are committed or none are (all-or-nothing).
 
-	// For each PreparedOperation, `prevHead` MUST match the value returned from a previous call to GetValidationContext, with the same `did`.
+	// For each PreparedOperation, `prevHead` MUST match the head value returned by an earlier call to GetHead.
+	// If multiple updates to the same DID are attempted concurrently, one will return an error due to head mismatch.
 	CommitOperations(ops []*PreparedOperation) error
 }
 
@@ -183,13 +184,13 @@ func (store *InMemoryOpStore) CommitOperations(ops []*PreparedOperation) error {
 	return nil
 }
 
-// GetValidationContext retrieves the initial information required to validate a signature for a particular operation.
+// getValidationContext retrieves the initial information required to validate a signature for a particular operation.
 // `cidStr` corresponds to the `prev` field of the operation you're trying to validate.
 // For genesis ops (i.e. prev==nil), pass cidStr=="".
 //
 // Returns the current "head" CID of the passed DID and the OpStatus for the previous operation.
 // Any subsequent calls to CommitValidatedOperations must pass the corresponding head, OpStatus values.
-func GetValidationContext(store OpStore, did string, cidStr string) (string, *OpStatus, error) {
+func getValidationContext(store OpStore, did string, cidStr string) (string, *OpStatus, error) {
 	head, err := store.GetHead(did)
 	if err != nil {
 		return "", nil, err
@@ -217,7 +218,12 @@ func GetValidationContext(store OpStore, did string, cidStr string) (string, *Op
 // VerifyOperation validates and prepares a single operation for commit.
 // It verifies the signature, validates timestamp consistency, and computes the nullification list.
 // Returns a PreparedOperation ready to be committed to the store.
-func VerifyOperation(store OpStore, did string, head string, prevStatus *OpStatus, op Operation, createdAt time.Time) (*PreparedOperation, error) {
+func VerifyOperation(store OpStore, did string, op Operation, createdAt time.Time) (*PreparedOperation, error) {
+	head, prevStatus, err := getValidationContext(store, did, op.PrevCIDStr())
+	if err != nil {
+		return nil, err
+	}
+
 	// Determine allowed keys for signature verification
 	var allowedKeys []string
 	if op.IsGenesis() {
