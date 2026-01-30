@@ -15,6 +15,7 @@ import (
 	"github.com/carlmjohnson/versioninfo"
 	"github.com/did-method-plc/go-didplc/didplc"
 	"github.com/gorilla/websocket"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 )
@@ -70,8 +71,9 @@ const (
 	// cursorPersistInterval is how often the resume cursor is persisted.
 	cursorPersistInterval = 1 * time.Second
 
-	// if this timeout is reached, we'll retry the request
-	httpClientTimeout = 10 * time.Second
+	// If this timeout is reached, we'll retry the request.
+	// Also used as the timeout for websocket reads, triggering a reconnect.
+	httpClientTimeout = 30 * time.Second
 )
 
 var (
@@ -115,7 +117,8 @@ func NewIngestor(store *DBOpStore, directoryURL string, startCursor int64, numWo
 		startCursor:        startCursor,
 		userAgent:          fmt.Sprintf("go-didplc-replica/%s", versioninfo.Short()),
 		httpClient: &http.Client{
-			Timeout: httpClientTimeout,
+			Timeout:   httpClientTimeout,
+			Transport: otelhttp.NewTransport(http.DefaultTransport),
 		},
 		wsDialer: websocket.DefaultDialer,
 		logger:   logger.With("component", "ingestor"),
@@ -301,6 +304,7 @@ func (i *Ingestor) ingestStream(ctx context.Context, cursor *int64, ops chan<- *
 	i.logger.Info("websocket connected", "url", wsURL)
 
 	for {
+		conn.SetReadDeadline(time.Now().Add(httpClientTimeout))
 		_, msg, err := conn.ReadMessage()
 		if err != nil {
 			// Check for OutdatedCursor close reason
