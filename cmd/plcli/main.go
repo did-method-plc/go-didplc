@@ -10,7 +10,7 @@ import (
 
 	"github.com/bluesky-social/indigo/atproto/atcrypto"
 	"github.com/bluesky-social/indigo/atproto/syntax"
-	"github.com/did-method-plc/go-didplc"
+	"github.com/did-method-plc/go-didplc/didplc"
 
 	"github.com/urfave/cli/v3"
 )
