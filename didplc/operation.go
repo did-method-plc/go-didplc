@@ -230,7 +230,7 @@ func (op *RegularOp) Doc(did string) (Doc, error) {
 	svc := []DocService{}
 	for key, s := range op.Services {
 		svc = append(svc, DocService{
-			ID:              "#" + key,
+			ID:              did + "#" + key,
 			Type:            s.Type,
 			ServiceEndpoint: s.Endpoint,
 		})
@@ -334,7 +334,7 @@ func (op *LegacyOp) Doc(did string) (Doc, error) {
 	// NOTE: could re-implement this by calling op.RegularOp().Doc()
 	svc := []DocService{
 		{
-			ID:              "#atproto_pds",
+			ID:              did + "#atproto_pds",
 			Type:            "AtprotoPersonalDataServer",
 			ServiceEndpoint: op.Service,
 		},
