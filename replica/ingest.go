@@ -69,6 +69,9 @@ const (
 
 	// cursorPersistInterval is how often the resume cursor is persisted.
 	cursorPersistInterval = 1 * time.Second
+
+	// if this timeout is reached, we'll retry the request
+	httpClientTimeout = 10 * time.Second
 )
 
 var (
@@ -111,9 +114,11 @@ func NewIngestor(store *DBOpStore, directoryURL string, startCursor int64, numWo
 		numWorkers:         numWorkers,
 		startCursor:        startCursor,
 		userAgent:          fmt.Sprintf("go-didplc-replica/%s", versioninfo.Short()),
-		httpClient:         &http.Client{Timeout: 0}, // TODO: probably should timeout, but we should make sure to retry
-		wsDialer:           websocket.DefaultDialer,
-		logger:             logger.With("component", "ingestor"),
+		httpClient: &http.Client{
+			Timeout: httpClientTimeout,
+		},
+		wsDialer: websocket.DefaultDialer,
+		logger:   logger.With("component", "ingestor"),
 	}, nil
 }
 
