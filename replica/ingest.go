@@ -85,29 +85,35 @@ var (
 // Ingestor streams operations from a PLC directory export endpoint,
 // validates them, and commits them to the local store.
 type Ingestor struct {
-	store        *DBOpStore
-	directoryURL string
-	numWorkers   int
-	startCursor  int64
-	userAgent    string
-	httpClient   *http.Client
-	wsDialer     *websocket.Dialer
-	logger       *slog.Logger
+	store              *DBOpStore
+	directoryURL       string
+	parsedDirectoryURL *url.URL
+	numWorkers         int
+	startCursor        int64
+	userAgent          string
+	httpClient         *http.Client
+	wsDialer           *websocket.Dialer
+	logger             *slog.Logger
 }
 
 // NewIngestor creates a new Ingestor. Pass startCursor == -1 to resume from
 // the cursor stored in the database.
-func NewIngestor(store *DBOpStore, directoryURL string, startCursor int64, numWorkers int, logger *slog.Logger) *Ingestor {
-	return &Ingestor{
-		store:        store,
-		directoryURL: directoryURL,
-		numWorkers:   numWorkers,
-		startCursor:  startCursor,
-		userAgent:    "go-didplc-replica",
-		httpClient:   &http.Client{Timeout: 0}, // TODO: probably should timeout, but we should make sure to retry
-		wsDialer:     websocket.DefaultDialer,
-		logger:       logger.With("component", "ingestor"),
+func NewIngestor(store *DBOpStore, directoryURL string, startCursor int64, numWorkers int, logger *slog.Logger) (*Ingestor, error) {
+	parsedDirectoryURL, err := url.Parse(directoryURL)
+	if err != nil {
+		return nil, err
 	}
+	return &Ingestor{
+		store:              store,
+		directoryURL:       directoryURL,
+		parsedDirectoryURL: parsedDirectoryURL,
+		numWorkers:         numWorkers,
+		startCursor:        startCursor,
+		userAgent:          "go-didplc-replica",
+		httpClient:         &http.Client{Timeout: 0}, // TODO: probably should timeout, but we should make sure to retry
+		wsDialer:           websocket.DefaultDialer,
+		logger:             logger.With("component", "ingestor"),
+	}, nil
 }
 
 // Run executes the full ingestion pipeline: resolving the cursor, spawning
@@ -262,7 +268,7 @@ func (i *Ingestor) ingestLoop(ctx context.Context, cursor *int64, ops chan<- *Se
 // operations until an error occurs. Returns errOutdatedCursor if the server
 // closes the connection with an OutdatedCursor reason.
 func (i *Ingestor) ingestStream(ctx context.Context, cursor *int64, ops chan<- *SequencedOp) error {
-	wsURL := buildStreamURL(i.directoryURL, *cursor)
+	wsURL := buildStreamURL(i.parsedDirectoryURL, *cursor)
 	i.logger.Debug("websocket connecting", "url", wsURL)
 
 	header := http.Header{}
@@ -420,25 +426,21 @@ func (i *Ingestor) ingestPaginated(ctx context.Context, cursor *int64, ops chan<
 
 // buildStreamURL converts an HTTP directory URL to a websocket /export/stream URL.
 // e.g. "https://host" -> "wss://host/export/stream?cursor=N"
-func buildStreamURL(directoryURL string, cursor int64) string {
-	u, err := url.Parse(directoryURL)
-	if err != nil {
-		// XXX: check this earlier?
-		panic(err)
-	}
+func buildStreamURL(u *url.URL, cursor int64) string {
+	copy := *u
 
-	switch u.Scheme {
+	switch copy.Scheme {
 	case "https":
-		u.Scheme = "wss"
+		copy.Scheme = "wss"
 	case "http":
-		u.Scheme = "ws"
+		copy.Scheme = "ws"
 	}
 
-	u.Path = "/export/stream"
-	q := u.Query()
+	copy.Path = "/export/stream"
+	q := copy.Query()
 	q.Set("cursor", fmt.Sprintf("%d", cursor))
-	u.RawQuery = q.Encode()
-	return u.String()
+	copy.RawQuery = q.Encode()
+	return copy.String()
 }
 
 // sleepCtx sleeps for the given duration or until the context is cancelled.
