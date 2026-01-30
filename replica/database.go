@@ -1,0 +1,318 @@
+package replica
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+	"net/url"
+	"time"
+
+	"github.com/did-method-plc/go-didplc/didplc"
+	slogGorm "github.com/orandin/slog-gorm"
+	"gorm.io/driver/postgres"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
+)
+
+// Head represents the current head CID for a DID
+type Head struct {
+	DID string `gorm:"column:did;primaryKey"`
+	CID string `gorm:"column:cid;not null"`
+}
+
+// OperationRecord represents a stored operation with its status in the database
+type OperationRecord struct {
+	DID              string        `gorm:"column:did;primaryKey;index:idx_operations_did_created_at,priority:1"`
+	CID              string        `gorm:"column:cid;primaryKey"`
+	CreatedAt        time.Time     `gorm:"column:created_at;not null;index:idx_operations_did_created_at,priority:2"`
+	Nullified        bool          `gorm:"column:nullified;not null;default:0"`
+	LastChild        string        `gorm:"column:last_child"`
+	AllowedKeysCount int           `gorm:"column:allowed_keys_count;not null"`
+	OpData           didplc.OpEnum `gorm:"column:op_data;not null"`
+}
+
+// Note: couldn't call the type Operation because that'd get confusing with didplc.Operation
+func (OperationRecord) TableName() string {
+	return "operations"
+}
+
+// for tracking the ingest cursor
+type HostCursor struct {
+	Host string `gorm:"primaryKey"`
+	Seq  int64  `gorm:"not null"`
+}
+
+// DBOpStore implements didplc.OpStore using a database backend
+type DBOpStore struct {
+	db *gorm.DB
+}
+
+var _ didplc.OpStore = (*DBOpStore)(nil)
+
+// NewDBOpStoreWithDialector creates a new database-backed operation store with a custom dialector
+func NewDBOpStoreWithDialector(dialector gorm.Dialector, logger *slog.Logger) (*DBOpStore, error) {
+	db, err := gorm.Open(dialector, &gorm.Config{
+		SkipDefaultTransaction: true,
+		//PrepareStmt:            true, // Doesn't seem to work well with postgres
+		Logger: slogGorm.New(
+			slogGorm.WithHandler(logger.With("component", "opstore").Handler()),
+			slogGorm.WithTraceAll(),
+			slogGorm.SetLogLevel(slogGorm.DefaultLogType, slog.LevelDebug),
+			slogGorm.SetLogLevel(slogGorm.SlowQueryLogType, slog.LevelWarn),
+			slogGorm.SetLogLevel(slogGorm.ErrorLogType, slog.LevelError),
+		),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to open database: %w", err)
+	}
+
+	// Configure connection pool
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get database handle: %w", err)
+	}
+
+	sqlDB.SetMaxOpenConns(40) // with postgres, seems like less can be more...
+	sqlDB.SetMaxIdleConns(10)
+	sqlDB.SetConnMaxLifetime(time.Hour)
+
+	// Auto-migrate the schema
+	if err := db.AutoMigrate(&Head{}, &OperationRecord{}, &HostCursor{}); err != nil {
+		return nil, fmt.Errorf("failed to migrate schema: %w", err)
+	}
+
+	return &DBOpStore{
+		db: db,
+	}, nil
+}
+
+func NewDBOpStoreWithSqlite(dbPath string, logger *slog.Logger) (*DBOpStore, error) {
+	return NewDBOpStoreWithDialector(
+		sqlite.Open(dbPath+"?mode=rwc&cache=shared&_journal_mode=WAL"),
+		logger,
+	)
+}
+
+func NewDBOpStoreWithPostgres(dsn string, logger *slog.Logger) (*DBOpStore, error) {
+	u, err := url.Parse(dsn)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse postgres URL: %w", err)
+	}
+	q := u.Query()
+	if !q.Has("synchronous_commit") {
+		q.Set("synchronous_commit", "off")
+	}
+	u.RawQuery = q.Encode()
+	return NewDBOpStoreWithDialector(
+		postgres.Open(u.String()),
+		logger,
+	)
+}
+
+// GetHead implements didplc.OpStore
+func (db *DBOpStore) GetHead(ctx context.Context, did string) (string, error) {
+	var head Head
+	result := db.db.WithContext(ctx).Select("cid").Where("did = ?", did).Take(&head)
+	if result.Error != nil {
+		if result.Error == gorm.ErrRecordNotFound {
+			return "", nil // DID not found
+		}
+		return "", fmt.Errorf("database error: %w", result.Error)
+	}
+	return head.CID, nil
+}
+
+// GetMetadata implements didplc.OpStore
+func (db *DBOpStore) GetMetadata(ctx context.Context, did string, cid string) (*didplc.OpStatus, error) {
+	var opRec OperationRecord
+	result := db.db.WithContext(ctx).Where("did = ? AND cid = ?", did, cid).Take(&opRec)
+	if result.Error != nil {
+		if result.Error == gorm.ErrRecordNotFound {
+			return nil, fmt.Errorf("operation not found")
+		}
+		return nil, fmt.Errorf("database error: %w", result.Error)
+	}
+
+	// Get rotation keys from the operation
+	operation := opRec.OpData.AsOperation()
+	if operation == nil {
+		return nil, fmt.Errorf("invalid operation type")
+	}
+
+	// Get rotation keys and slice to allowed count
+	rotationKeys := operation.EquivalentRotationKeys()
+	allowedKeys := rotationKeys[:opRec.AllowedKeysCount]
+
+	return &didplc.OpStatus{
+		DID:         opRec.DID,
+		CreatedAt:   opRec.CreatedAt,
+		Nullified:   opRec.Nullified,
+		LastChild:   opRec.LastChild,
+		AllowedKeys: allowedKeys,
+	}, nil
+}
+
+// GetOperation implements didplc.OpStore
+func (db *DBOpStore) GetOperation(ctx context.Context, did string, cid string) (didplc.Operation, error) {
+	var opRec OperationRecord
+	result := db.db.WithContext(ctx).Select("op_data").Where("did = ? AND cid = ?", did, cid).Take(&opRec)
+	if result.Error != nil {
+		if result.Error == gorm.ErrRecordNotFound {
+			return nil, fmt.Errorf("operation not found")
+		}
+		return nil, fmt.Errorf("database error: %w", result.Error)
+	}
+
+	operation := opRec.OpData.AsOperation()
+	if operation == nil {
+		return nil, fmt.Errorf("invalid operation type")
+	}
+
+	return operation, nil
+}
+
+// CommitOperations implements didplc.OpStore
+func (db *DBOpStore) CommitOperations(ctx context.Context, ops []*didplc.PreparedOperation) error {
+	// Begin transaction
+	return db.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		for _, prepOp := range ops {
+			// Wrap the operation
+			opEnum, err := didplc.WrapOperation(prepOp.Op)
+			if err != nil {
+				return fmt.Errorf("failed to wrap operation: %w", err)
+			}
+
+			if prepOp.PrevHead == "" {
+				// Genesis operation
+				// Insert new operation
+				newOp := OperationRecord{
+					DID:              prepOp.DID,
+					CID:              prepOp.OpCid,
+					CreatedAt:        prepOp.CreatedAt,
+					Nullified:        false,
+					LastChild:        "",
+					AllowedKeysCount: len(prepOp.Op.EquivalentRotationKeys()),
+					OpData:           *opEnum,
+				}
+				if err := tx.Create(&newOp).Error; err != nil {
+					return fmt.Errorf("failed to create operation: %w", err)
+				}
+
+				// Insert new head
+				newHead := Head{
+					DID: prepOp.DID,
+					CID: prepOp.OpCid,
+				}
+				if err := tx.Create(&newHead).Error; err != nil {
+					return fmt.Errorf("failed to create head: %w", err)
+				}
+			} else {
+				// Non-genesis operation
+				// Mark nullified operations
+				for _, nullifiedCid := range prepOp.NullifiedOps {
+					if err := tx.Model(&OperationRecord{}).Where("did = ? AND cid = ?", prepOp.DID, nullifiedCid).Update("nullified", true).Error; err != nil {
+						return fmt.Errorf("failed to mark operation as nullified: %w", err)
+					}
+				}
+
+				// Update previous operation's last_child and allowed_keys_count
+				if err := tx.Model(&OperationRecord{}).Where("did = ? AND cid = ?", prepOp.DID, prepOp.Op.PrevCIDStr()).Updates(map[string]interface{}{
+					"last_child":         prepOp.OpCid,
+					"allowed_keys_count": prepOp.KeyIndex,
+				}).Error; err != nil {
+					return fmt.Errorf("failed to update previous operation: %w", err)
+				}
+
+				// Insert new operation
+				newOp := OperationRecord{
+					DID:              prepOp.DID,
+					CID:              prepOp.OpCid,
+					CreatedAt:        prepOp.CreatedAt,
+					Nullified:        false,
+					LastChild:        "",
+					AllowedKeysCount: len(prepOp.Op.EquivalentRotationKeys()),
+					OpData:           *opEnum,
+				}
+				if err := tx.Create(&newOp).Error; err != nil {
+					return fmt.Errorf("failed to create operation: %w", err)
+				}
+
+				// Update head with optimistic locking check
+				result := tx.Model(&Head{}).Where("did = ? AND cid = ?", prepOp.DID, prepOp.PrevHead).Update("cid", prepOp.OpCid)
+				if result.Error != nil {
+					return fmt.Errorf("failed to update head: %w", result.Error)
+				} else if result.RowsAffected != 1 {
+					return fmt.Errorf("head CID mismatch")
+				}
+			}
+		}
+
+		return nil
+	})
+}
+
+// Not part of the OpStore interface, used to implement the GET /did/log endpoint
+func (db *DBOpStore) GetOperationLog(ctx context.Context, did string) ([]*didplc.OpEnum, error) {
+	var opRecs []OperationRecord
+
+	result := db.db.WithContext(ctx).Where("did = ?", did).Where("nullified = ?", false).Order("created_at ASC").Find(&opRecs)
+	if result.Error != nil {
+		return nil, fmt.Errorf("database error: %w", result.Error)
+	}
+
+	operations := make([]*didplc.OpEnum, 0, len(opRecs))
+	for _, opRec := range opRecs {
+		operations = append(operations, &opRec.OpData)
+	}
+
+	return operations, nil
+}
+
+// Not part of the OpStore interface, used to implement the GET /did/log/audit endpoint
+func (db *DBOpStore) GetOperationLogAudit(ctx context.Context, did string) ([]*didplc.LogEntry, error) {
+	var opRecs []OperationRecord
+
+	result := db.db.WithContext(ctx).Where("did = ?", did).Order("created_at ASC").Find(&opRecs)
+	if result.Error != nil {
+		return nil, fmt.Errorf("database error: %w", result.Error)
+	}
+
+	entries := make([]*didplc.LogEntry, 0, len(opRecs))
+	for _, opRec := range opRecs {
+		entry := &didplc.LogEntry{
+			DID:       opRec.DID,
+			Operation: opRec.OpData,
+			CID:       opRec.CID,
+			Nullified: opRec.Nullified,
+			CreatedAt: opRec.CreatedAt.UTC().Format("2006-01-02T15:04:05.000Z"),
+		}
+		entries = append(entries, entry)
+	}
+
+	return entries, nil
+}
+
+func (db *DBOpStore) PutCursor(ctx context.Context, host string, seq int64) error {
+	// upsert
+	result := db.db.WithContext(ctx).Clauses(clause.OnConflict{
+		UpdateAll: true,
+	}).Create(&HostCursor{
+		Host: host,
+		Seq:  seq,
+	})
+	return result.Error
+}
+
+// returns 0 if not found (since new hosts should start from 0)
+func (db *DBOpStore) GetCursor(ctx context.Context, host string) (int64, error) {
+	var hostCursor HostCursor
+	result := db.db.WithContext(ctx).Where("host = ?", host).Take(&hostCursor)
+	if result.Error == gorm.ErrRecordNotFound {
+		return 0, nil
+	}
+	if result.Error != nil {
+		return 0, result.Error
+	}
+	return hostCursor.Seq, nil
+}
