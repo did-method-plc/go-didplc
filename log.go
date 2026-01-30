@@ -1,6 +1,7 @@
 package didplc
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/bluesky-social/indigo/atproto/syntax"
@@ -51,6 +52,7 @@ func VerifyOpLog(entries []LogEntry) error {
 
 	did := entries[0].DID
 	os := NewInMemoryOpStore()
+	ctx := context.Background()
 
 	for _, oe := range entries {
 		if oe.DID != did {
@@ -73,12 +75,12 @@ func VerifyOpLog(entries []LogEntry) error {
 		}
 		timestamp := datetime.Time()
 
-		po, err := VerifyOperation(os, did, op, timestamp)
+		po, err := VerifyOperation(ctx, os, did, op, timestamp)
 		if err != nil {
 			return err
 		}
 
-		err = os.CommitOperations([]*PreparedOperation{po})
+		err = os.CommitOperations(ctx, []*PreparedOperation{po})
 		if err != nil {
 			return err
 		}
@@ -92,7 +94,7 @@ func VerifyOpLog(entries []LogEntry) error {
 				return fmt.Errorf("genesis op cannot be nullified")
 			}
 		}
-		status, err := os.GetMetadata(did, oe.CID)
+		status, err := os.GetMetadata(ctx, did, oe.CID)
 		if err != nil {
 			return err
 		}
