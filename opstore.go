@@ -265,13 +265,6 @@ func VerifyOperation(ctx context.Context, store OpStore, did string, op Operatio
 		return &prepOp, nil
 	}
 
-	// Get the previous operation's metadata
-	prevCidStr := op.PrevCIDStr()
-	prevStatus, err = store.GetMetadata(ctx, did, prevCidStr)
-	if err != nil {
-		return nil, err
-	}
-
 	if prevStatus.Nullified {
 		return nil, fmt.Errorf("prev CID is nullified")
 	}
