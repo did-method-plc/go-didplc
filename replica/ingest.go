@@ -212,7 +212,7 @@ func (i *Ingestor) Run(ctx context.Context) error {
 //
 // It starts by attempting a websocket stream. If the server reports an outdated
 // cursor, it falls back to paginated ingestion until caught up, then switches
-// back to streaming. Other errors trigger a retry with a 5-second delay.
+// back to streaming. Other errors trigger a retry after a fixed delay.
 func (i *Ingestor) ingestLoop(ctx context.Context, cursor *int64, ops chan<- *SequencedOp) {
 	recordState := func(attr attribute.KeyValue) {
 		// Record 1 for the active state, 0 for the other
