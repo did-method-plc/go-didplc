@@ -60,13 +60,10 @@ func VerifyOpLog(entries []LogEntry) error {
 		}
 		// NOTE: we do not call oe.Validate() here because we'd end up verifying
 		// genesis op signatures twice.
-		// We check for CID consistency here, and will verify signatures (for all op types) later.
+		// All validation is performed inside VerifyOperation()
 		op := oe.Operation.AsOperation()
 		if op == nil {
 			return fmt.Errorf("invalid operation type")
-		}
-		if op.CID().String() != oe.CID {
-			return fmt.Errorf("inconsistent CID")
 		}
 
 		datetime, err := syntax.ParseDatetime(oe.CreatedAt)
@@ -78,6 +75,10 @@ func VerifyOpLog(entries []LogEntry) error {
 		po, err := VerifyOperation(ctx, os, did, op, timestamp)
 		if err != nil {
 			return err
+		}
+		// extra CID check (since oe.CID is not checked inside VerifyOperation)
+		if po.OpCid != oe.CID {
+			return fmt.Errorf("inconsistent CID")
 		}
 
 		err = os.CommitOperations(ctx, []*PreparedOperation{po})
