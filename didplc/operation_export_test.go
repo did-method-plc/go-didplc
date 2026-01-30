@@ -47,7 +47,7 @@ func TestExportLogEntryValidate(t *testing.T) {
 
 	assert := assert.New(t)
 
-	knownBadCIDsList, err := loadJSONStringArray("testdata/known_bad_cids.json")
+	knownBadCIDsList, err := loadJSONStringArray("../testdata/known_bad_cids.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +132,7 @@ func TestExportAuditLogEntryValidate(t *testing.T) {
 
 	assert := assert.New(t)
 
-	knownBadDIDsList, err := loadJSONStringArray("testdata/known_bad_dids.json")
+	knownBadDIDsList, err := loadJSONStringArray("../testdata/known_bad_dids.json")
 	if err != nil {
 		t.Fatal(err)
 	}
