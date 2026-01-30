@@ -101,6 +101,7 @@ func NewDBOpStoreWithPostgres(dsn string, logger *slog.Logger) (*DBOpStore, erro
 	}
 	q := u.Query()
 	if !q.Has("synchronous_commit") {
+		// Since we're a replica, if we lose data we can just re-fetch it from the origin.
 		q.Set("synchronous_commit", "off")
 	}
 	u.RawQuery = q.Encode()

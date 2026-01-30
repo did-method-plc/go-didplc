@@ -125,7 +125,7 @@ func run(ctx context.Context, cmd *cli.Command) error {
 	slog.SetDefault(logger)
 
 	if numWorkers <= 0 {
-		numWorkers = runtime.NumCPU() //* 10
+		numWorkers = runtime.NumCPU()
 	}
 
 	otelShutdown, err := setupOTel(ctx)
@@ -163,7 +163,10 @@ func run(ctx context.Context, cmd *cli.Command) error {
 	})
 
 	if !noIngest {
-		ingestor := replica.NewIngestor(store, directoryURL, cursorOverride, numWorkers, logger)
+		ingestor, err := replica.NewIngestor(store, directoryURL, cursorOverride, numWorkers, logger)
+		if err != nil {
+			return err
+		}
 		g.Go(func() error {
 			return ingestor.Run(gctx)
 		})
