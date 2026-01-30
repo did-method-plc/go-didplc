@@ -1,6 +1,7 @@
 package didplc
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -28,22 +29,22 @@ type PreparedOperation struct {
 type OpStore interface {
 	// GetHead returns the CID of the most recent valid operation for a DID.
 	// Returns empty string if the DID does not exist.
-	GetHead(did string) (string, error)
+	GetHead(ctx context.Context, did string) (string, error)
 
 	// GetMetadata returns metadata about a specific operation.
 	// Returns an error if the operation does not exist.
-	GetMetadata(did string, cid string) (*OpStatus, error)
+	GetMetadata(ctx context.Context, did string, cid string) (*OpStatus, error)
 
 	// GetOperation returns the operation data for a specific DID and CID.
 	// Returns an error if the operation does not exist.
-	GetOperation(did string, cid string) (Operation, error)
+	GetOperation(ctx context.Context, did string, cid string) (Operation, error)
 
 	// CommitOperations atomically commits a batch of prepared operations to the store.
 	// All operations in the batch are committed or none are (all-or-nothing).
 
 	// For each PreparedOperation, `prevHead` MUST match the head value returned by an earlier call to GetHead.
 	// If multiple updates to the same DID are attempted concurrently, one will return an error due to head mismatch.
-	CommitOperations(ops []*PreparedOperation) error
+	CommitOperations(ctx context.Context, ops []*PreparedOperation) error
 }
 
 type InMemoryOpStore struct {
@@ -63,7 +64,7 @@ func NewInMemoryOpStore() *InMemoryOpStore {
 
 // GetHead returns the CID of the most recent valid operation for a DID.
 // Returns empty string if the DID does not exist.
-func (store *InMemoryOpStore) GetHead(did string) (string, error) {
+func (store *InMemoryOpStore) GetHead(ctx context.Context, did string) (string, error) {
 	store.lock.RLock()
 	defer store.lock.RUnlock()
 
@@ -77,7 +78,7 @@ func (store *InMemoryOpStore) GetHead(did string) (string, error) {
 // GetMetadata returns metadata about a specific operation.
 // Returns an error if the operation does not exist or belongs to a different DID.
 // The returned OpStatus is a copy and safe for mutation.
-func (store *InMemoryOpStore) GetMetadata(did string, cid string) (*OpStatus, error) {
+func (store *InMemoryOpStore) GetMetadata(ctx context.Context, did string, cid string) (*OpStatus, error) {
 	store.lock.RLock()
 	defer store.lock.RUnlock()
 
@@ -96,7 +97,7 @@ func (store *InMemoryOpStore) GetMetadata(did string, cid string) (*OpStatus, er
 
 // GetOperation returns the operation data for a specific DID and CID.
 // Returns an error if the operation does not exist or belongs to a different DID.
-func (store *InMemoryOpStore) GetOperation(did string, cid string) (Operation, error) {
+func (store *InMemoryOpStore) GetOperation(ctx context.Context, did string, cid string) (Operation, error) {
 	store.lock.RLock()
 	defer store.lock.RUnlock()
 
@@ -122,7 +123,7 @@ func (store *InMemoryOpStore) GetOperation(did string, cid string) (Operation, e
 
 // CommitOperations atomically commits a batch of prepared operations to the store.
 // All operations in the batch are committed or none are (all-or-nothing).
-func (store *InMemoryOpStore) CommitOperations(ops []*PreparedOperation) error {
+func (store *InMemoryOpStore) CommitOperations(ctx context.Context, ops []*PreparedOperation) error {
 	store.lock.Lock()
 	defer store.lock.Unlock()
 
@@ -190,8 +191,8 @@ func (store *InMemoryOpStore) CommitOperations(ops []*PreparedOperation) error {
 //
 // Returns the current "head" CID of the passed DID and the OpStatus for the previous operation.
 // Any subsequent calls to CommitValidatedOperations must pass the corresponding head, OpStatus values.
-func getValidationContext(store OpStore, did string, cidStr string) (string, *OpStatus, error) {
-	head, err := store.GetHead(did)
+func getValidationContext(ctx context.Context, store OpStore, did string, cidStr string) (string, *OpStatus, error) {
+	head, err := store.GetHead(ctx, did)
 	if err != nil {
 		return "", nil, err
 	}
@@ -207,7 +208,7 @@ func getValidationContext(store OpStore, did string, cidStr string) (string, *Op
 		return "", nil, fmt.Errorf("expected genesis op but DID already exists")
 	}
 
-	status, err := store.GetMetadata(did, cidStr)
+	status, err := store.GetMetadata(ctx, did, cidStr)
 	if err != nil {
 		return "", nil, err
 	}
@@ -218,8 +219,8 @@ func getValidationContext(store OpStore, did string, cidStr string) (string, *Op
 // VerifyOperation validates and prepares a single operation for commit.
 // It verifies the signature, validates timestamp consistency, and computes the nullification list.
 // Returns a PreparedOperation ready to be committed to the store.
-func VerifyOperation(store OpStore, did string, op Operation, createdAt time.Time) (*PreparedOperation, error) {
-	head, prevStatus, err := getValidationContext(store, did, op.PrevCIDStr())
+func VerifyOperation(ctx context.Context, store OpStore, did string, op Operation, createdAt time.Time) (*PreparedOperation, error) {
+	head, prevStatus, err := getValidationContext(ctx, store, did, op.PrevCIDStr())
 	if err != nil {
 		return nil, err
 	}
@@ -264,13 +265,6 @@ func VerifyOperation(store OpStore, did string, op Operation, createdAt time.Tim
 		return &prepOp, nil
 	}
 
-	// Get the previous operation's metadata
-	prevCidStr := op.PrevCIDStr()
-	prevStatus, err = store.GetMetadata(did, prevCidStr)
-	if err != nil {
-		return nil, err
-	}
-
 	if prevStatus.Nullified {
 		return nil, fmt.Errorf("prev CID is nullified")
 	}
@@ -284,7 +278,7 @@ func VerifyOperation(store OpStore, did string, op Operation, createdAt time.Tim
 		prepOp.NullifiedOps = nil
 	} else {
 		// This is a nullification - validate timestamp against head
-		headStatus, err := store.GetMetadata(did, head)
+		headStatus, err := store.GetMetadata(ctx, did, head)
 		if err != nil {
 			return nil, err
 		}
@@ -299,7 +293,7 @@ func VerifyOperation(store OpStore, did string, op Operation, createdAt time.Tim
 
 		for currentCid != "" {
 			nullifiedOps = append(nullifiedOps, currentCid)
-			status, err := store.GetMetadata(did, currentCid)
+			status, err := store.GetMetadata(ctx, did, currentCid)
 			if err != nil {
 				return nil, err
 			}

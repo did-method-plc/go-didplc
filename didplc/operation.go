@@ -2,6 +2,7 @@ package didplc
 
 import (
 	"crypto/sha256"
+	"database/sql/driver"
 	"encoding/base32"
 	"encoding/base64"
 	"encoding/json"
@@ -229,7 +230,7 @@ func (op *RegularOp) Doc(did string) (Doc, error) {
 	svc := []DocService{}
 	for key, s := range op.Services {
 		svc = append(svc, DocService{
-			ID:              did + "#" + key,
+			ID:              "#" + key,
 			Type:            s.Type,
 			ServiceEndpoint: s.Endpoint,
 		})
@@ -332,14 +333,14 @@ func (op *LegacyOp) VerifySignature(pub atcrypto.PublicKey) error {
 func (op *LegacyOp) Doc(did string) (Doc, error) {
 	// NOTE: could re-implement this by calling op.RegularOp().Doc()
 	svc := []DocService{
-		DocService{
-			ID:              did + "#atproto_pds",
+		{
+			ID:              "#atproto_pds",
 			Type:            "AtprotoPersonalDataServer",
 			ServiceEndpoint: op.Service,
 		},
 	}
 	vm := []DocVerificationMethod{
-		DocVerificationMethod{
+		{
 			ID:                 did + "#atproto",
 			Type:               "Multikey",
 			Controller:         did,
@@ -482,6 +483,31 @@ func (o *OpEnum) UnmarshalJSON(b []byte) error {
 	default:
 		return fmt.Errorf("unexpected operation type: %s", typ)
 	}
+}
+
+// Value implements the driver.Valuer interface
+func (o OpEnum) Value() (driver.Value, error) {
+	// TODO: consider using CBOR here?
+	return o.MarshalJSON()
+}
+
+// Scan implements the sql.Scanner interface
+func (o *OpEnum) Scan(value interface{}) error {
+	if value == nil {
+		return nil
+	}
+
+	var bytes []byte
+	switch v := value.(type) {
+	case []byte:
+		bytes = v
+	case string:
+		bytes = []byte(v)
+	default:
+		return fmt.Errorf("failed to scan OpEnum: expected []byte or string, got %T", value)
+	}
+
+	return o.UnmarshalJSON(bytes)
 }
 
 // returns a new signed PLC operation using the provided atproto-specific metdata
