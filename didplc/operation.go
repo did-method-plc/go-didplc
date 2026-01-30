@@ -2,6 +2,7 @@ package didplc
 
 import (
 	"crypto/sha256"
+	"database/sql/driver"
 	"encoding/base32"
 	"encoding/base64"
 	"encoding/json"
@@ -332,14 +333,14 @@ func (op *LegacyOp) VerifySignature(pub atcrypto.PublicKey) error {
 func (op *LegacyOp) Doc(did string) (Doc, error) {
 	// NOTE: could re-implement this by calling op.RegularOp().Doc()
 	svc := []DocService{
-		DocService{
+		{
 			ID:              did + "#atproto_pds",
 			Type:            "AtprotoPersonalDataServer",
 			ServiceEndpoint: op.Service,
 		},
 	}
 	vm := []DocVerificationMethod{
-		DocVerificationMethod{
+		{
 			ID:                 did + "#atproto",
 			Type:               "Multikey",
 			Controller:         did,
@@ -484,6 +485,31 @@ func (o *OpEnum) UnmarshalJSON(b []byte) error {
 	}
 }
 
+// Value implements the driver.Valuer interface
+func (o OpEnum) Value() (driver.Value, error) {
+	// TODO: consider using CBOR here?
+	return o.MarshalJSON()
+}
+
+// Scan implements the sql.Scanner interface
+func (o *OpEnum) Scan(value interface{}) error {
+	if value == nil {
+		return nil
+	}
+
+	var bytes []byte
+	switch v := value.(type) {
+	case []byte:
+		bytes = v
+	case string:
+		bytes = []byte(v)
+	default:
+		return fmt.Errorf("failed to scan OpEnum: expected []byte or string, got %T", value)
+	}
+
+	return o.UnmarshalJSON(bytes)
+}
+
 // returns a new signed PLC operation using the provided atproto-specific metdata
 func NewAtproto(priv atcrypto.PrivateKey, handle string, pdsEndpoint string, rotationKeys []string) (RegularOp, error) {
 
@@ -527,4 +553,26 @@ func (oe *OpEnum) AsOperation() Operation {
 		// TODO; something more safe here?
 		return nil
 	}
+}
+
+// WrapOperation converts an Operation interface to an OpEnum for marshaling
+func WrapOperation(op Operation) (*OpEnum, error) {
+	if op == nil {
+		return nil, fmt.Errorf("cannot wrap nil operation")
+	}
+
+	opEnum := &OpEnum{}
+
+	switch v := op.(type) {
+	case *RegularOp:
+		opEnum.Regular = v
+	case *LegacyOp:
+		opEnum.Legacy = v
+	case *TombstoneOp:
+		opEnum.Tombstone = v
+	default:
+		return nil, fmt.Errorf("unknown operation type: %T", op)
+	}
+
+	return opEnum, nil
 }

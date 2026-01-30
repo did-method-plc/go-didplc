@@ -14,29 +14,29 @@ import (
 )
 
 var VALID_LOG_PATHS = [...]string{
-	"testdata/log_bskyapp.json",
-	"testdata/log_legacy_dholms.json",
-	"testdata/log_bnewbold_robocracy.json",
-	"testdata/log_empty_rotation_keys.json",
-	"testdata/log_duplicate_rotation_keys.json", // XXX: invalid according to spec, valid according to TS reference impl
-	"testdata/log_nullification.json",
-	"testdata/log_nullification_nontrivial.json",
-	"testdata/log_nullification_at_exactly_72h.json",
-	"testdata/log_nullified_tombstone.json",
-	"testdata/log_tombstone.json",
+	"../testdata/log_bskyapp.json",
+	"../testdata/log_legacy_dholms.json",
+	"../testdata/log_bnewbold_robocracy.json",
+	"../testdata/log_empty_rotation_keys.json",
+	"../testdata/log_duplicate_rotation_keys.json", // XXX: invalid according to spec, valid according to TS reference impl
+	"../testdata/log_nullification.json",
+	"../testdata/log_nullification_nontrivial.json",
+	"../testdata/log_nullification_at_exactly_72h.json",
+	"../testdata/log_nullified_tombstone.json",
+	"../testdata/log_tombstone.json",
 }
 
 var INVALID_LOG_PATHS = [...]string{
-	"testdata/log_invalid_sig_b64_padding_chars.json",
-	"testdata/log_invalid_sig_b64_padding_bits.json",
-	"testdata/log_invalid_sig_b64_newline.json",
-	"testdata/log_invalid_sig_der.json",
-	"testdata/log_invalid_sig_p256_high_s.json",
-	"testdata/log_invalid_sig_k256_high_s.json",
-	"testdata/log_invalid_nullification_reused_key.json",
-	"testdata/log_invalid_nullification_too_slow.json",
-	"testdata/log_invalid_update_nullified.json",
-	"testdata/log_invalid_update_tombstoned.json",
+	"../testdata/log_invalid_sig_b64_padding_chars.json",
+	"../testdata/log_invalid_sig_b64_padding_bits.json",
+	"../testdata/log_invalid_sig_b64_newline.json",
+	"../testdata/log_invalid_sig_der.json",
+	"../testdata/log_invalid_sig_p256_high_s.json",
+	"../testdata/log_invalid_sig_k256_high_s.json",
+	"../testdata/log_invalid_nullification_reused_key.json",
+	"../testdata/log_invalid_nullification_too_slow.json",
+	"../testdata/log_invalid_update_nullified.json",
+	"../testdata/log_invalid_update_tombstoned.json",
 }
 
 func loadTestLogEntries(t *testing.T, p string) []LogEntry {
@@ -100,22 +100,22 @@ func TestLogEntryInvalid(t *testing.T) {
 func TestAuditLogInvalidSigEncoding(t *testing.T) {
 	assert := assert.New(t)
 
-	entries := loadTestLogEntries(t, "testdata/log_invalid_sig_b64_padding_chars.json")
+	entries := loadTestLogEntries(t, "../testdata/log_invalid_sig_b64_padding_chars.json")
 	assert.ErrorContains(VerifyOpLog(entries), "illegal base64")
 
-	entries = loadTestLogEntries(t, "testdata/log_invalid_sig_b64_padding_bits.json")
+	entries = loadTestLogEntries(t, "../testdata/log_invalid_sig_b64_padding_bits.json")
 	assert.ErrorContains(VerifyOpLog(entries), "illegal base64")
 
-	entries = loadTestLogEntries(t, "testdata/log_invalid_sig_b64_newline.json")
+	entries = loadTestLogEntries(t, "../testdata/log_invalid_sig_b64_newline.json")
 	assert.ErrorContains(VerifyOpLog(entries), "CRLF")
 
-	entries = loadTestLogEntries(t, "testdata/log_invalid_sig_der.json")
+	entries = loadTestLogEntries(t, "../testdata/log_invalid_sig_der.json")
 	assert.EqualError(VerifyOpLog(entries), "crytographic signature invalid") // Note: there is no reliable way to detect DER-encoded signatures syntactically, so a generic invalid signature error is expected
 
-	entries = loadTestLogEntries(t, "testdata/log_invalid_sig_p256_high_s.json")
+	entries = loadTestLogEntries(t, "../testdata/log_invalid_sig_p256_high_s.json")
 	assert.EqualError(VerifyOpLog(entries), "crytographic signature invalid")
 
-	entries = loadTestLogEntries(t, "testdata/log_invalid_sig_k256_high_s.json")
+	entries = loadTestLogEntries(t, "../testdata/log_invalid_sig_k256_high_s.json")
 	assert.EqualError(VerifyOpLog(entries), "crytographic signature invalid")
 
 }
@@ -123,20 +123,20 @@ func TestAuditLogInvalidSigEncoding(t *testing.T) {
 func TestAuditLogInvalidNullification(t *testing.T) {
 	assert := assert.New(t)
 
-	entries := loadTestLogEntries(t, "testdata/log_invalid_nullification_reused_key.json")
+	entries := loadTestLogEntries(t, "../testdata/log_invalid_nullification_reused_key.json")
 	assert.EqualError(VerifyOpLog(entries), "crytographic signature invalid") // TODO: This is the expected error message for the current impl logic. This could be improved.
 
-	entries = loadTestLogEntries(t, "testdata/log_invalid_nullification_too_slow.json")
+	entries = loadTestLogEntries(t, "../testdata/log_invalid_nullification_too_slow.json")
 	assert.ErrorContains(VerifyOpLog(entries), "cannot nullify op after 72h")
 
-	entries = loadTestLogEntries(t, "testdata/log_invalid_update_nullified.json")
+	entries = loadTestLogEntries(t, "../testdata/log_invalid_update_nullified.json")
 	assert.EqualError(VerifyOpLog(entries), "prev CID is nullified")
 }
 
 func TestAuditLogInvalidTombstoneUpdate(t *testing.T) {
 	assert := assert.New(t)
 
-	entries := loadTestLogEntries(t, "testdata/log_invalid_update_tombstoned.json")
+	entries := loadTestLogEntries(t, "../testdata/log_invalid_update_tombstoned.json")
 	assert.EqualError(VerifyOpLog(entries), "no keys to verify against") // TODO: This is the expected error message for the current impl logic. This could be improved.
 }
 
