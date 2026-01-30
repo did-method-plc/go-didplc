@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/carlmjohnson/versioninfo"
 	"github.com/did-method-plc/go-didplc/didplc"
 	"github.com/gorilla/websocket"
 	"go.opentelemetry.io/otel/attribute"
@@ -109,7 +110,7 @@ func NewIngestor(store *DBOpStore, directoryURL string, startCursor int64, numWo
 		parsedDirectoryURL: parsedDirectoryURL,
 		numWorkers:         numWorkers,
 		startCursor:        startCursor,
-		userAgent:          "go-didplc-replica",
+		userAgent:          fmt.Sprintf("go-didplc-replica/%s", versioninfo.Short()),
 		httpClient:         &http.Client{Timeout: 0}, // TODO: probably should timeout, but we should make sure to retry
 		wsDialer:           websocket.DefaultDialer,
 		logger:             logger.With("component", "ingestor"),

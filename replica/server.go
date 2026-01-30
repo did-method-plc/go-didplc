@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/carlmjohnson/versioninfo"
 	"github.com/did-method-plc/go-didplc/didplc"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
@@ -38,6 +39,7 @@ func NewServer(store *DBOpStore, addr string, logger *slog.Logger) *Server {
 // Run starts the HTTP server (blocking)
 func (s *Server) Run() error {
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /_health", s.handleHealth)
 	mux.HandleFunc("GET /{did}/log/audit", s.handleDIDLogAudit)
 	mux.HandleFunc("GET /{did}/log/last", s.handleDIDLogLast)
 	mux.HandleFunc("GET /{did}/log", s.handleDIDLog)
@@ -55,6 +57,14 @@ func (s *Server) Run() error {
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
 	fmt.Fprint(w, "hello plc replica\n")
+}
+
+// handleHealth handles GET /_health - returns version information
+func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"version": versioninfo.Short(),
+	})
 }
 
 // writeJSONError writes a JSON error response
