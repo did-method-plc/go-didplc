@@ -4,10 +4,12 @@ import (
 	"crypto/sha256"
 	"encoding/base32"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
+
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 
 	"github.com/bluesky-social/indigo/atproto/atcrypto"
 
@@ -458,30 +460,54 @@ func (o *OpEnum) MarshalJSON() ([]byte, error) {
 	return nil, fmt.Errorf("can't marshal empty OpEnum")
 }
 
-func (o *OpEnum) UnmarshalJSON(b []byte) error {
-	var typeMap map[string]interface{}
-	err := json.Unmarshal(b, &typeMap)
+func (o *OpEnum) MarshalJSONV2(enc *jsontext.Encoder, opts json.Options) error {
+	b, err := o.MarshalJSON()
 	if err != nil {
 		return err
 	}
-	typ, ok := typeMap["type"]
-	if !ok {
+	return enc.WriteValue(b)
+}
+
+func (o *OpEnum) UnmarshalJSON(b []byte) error {
+	// Extract just the type field
+	var typeStruct struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(b, &typeStruct, json.MatchCaseInsensitiveNames(false)); err != nil {
+		return err
+	}
+	if typeStruct.Type == "" {
 		return fmt.Errorf("did not find expected operation 'type' field")
 	}
 
-	switch typ {
+	// Use strict options: reject unknown fields and require case-sensitive names
+	opts := json.JoinOptions(
+		json.RejectUnknownMembers(true),
+		json.MatchCaseInsensitiveNames(false),
+	)
+
+	switch typeStruct.Type {
 	case "plc_operation":
 		o.Regular = &RegularOp{}
-		return json.Unmarshal(b, o.Regular)
+		return json.Unmarshal(b, o.Regular, opts)
 	case "create":
 		o.Legacy = &LegacyOp{}
-		return json.Unmarshal(b, o.Legacy)
+		return json.Unmarshal(b, o.Legacy, opts)
 	case "plc_tombstone":
 		o.Tombstone = &TombstoneOp{}
-		return json.Unmarshal(b, o.Tombstone)
+		return json.Unmarshal(b, o.Tombstone, opts)
 	default:
-		return fmt.Errorf("unexpected operation type: %s", typ)
+		return fmt.Errorf("unexpected operation type: %s", typeStruct.Type)
 	}
+}
+
+func (o *OpEnum) UnmarshalJSONV2(dec *jsontext.Decoder, opts json.Options) error {
+	// Peek at the raw JSON to determine the type
+	val, err := dec.ReadValue()
+	if err != nil {
+		return err
+	}
+	return o.UnmarshalJSON(val)
 }
 
 // returns a new signed PLC operation using the provided atproto-specific metdata
