@@ -40,7 +40,7 @@ type OpStore interface {
 	// Returns nil if the DID does not exist.
 	GetLatest(ctx context.Context, did string) (*OpEntry, error)
 
-	// Returns all enties for a given DID, including those which are nullified.
+	// Returns all entries for a given DID, including those which are nullified.
 	// Returns nil or empty slice if the DID does not exist.
 	// An implementation may choose not to implement this method, returning ErrNotImplemented if so.
 	GetAllEntries(ctx context.Context, did string) ([]*OpEntry, error)
