@@ -95,7 +95,7 @@ func VerifyOpLog(entries []LogEntry) error {
 				return fmt.Errorf("genesis op cannot be nullified")
 			}
 		}
-		status, err := mos.GetMetadata(ctx, did, oe.CID)
+		status, err := mos.GetEntry(ctx, did, oe.CID)
 		if err != nil {
 			return err
 		}
