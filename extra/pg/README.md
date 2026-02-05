@@ -1,6 +1,6 @@
 # pg
 
-Helpers for working with postgres
+Helpers for working with postgres (borrowed from https://github.com/did-method-plc/did-method-plc/tree/main/packages/server/pg )
 
 ## Usage
 
