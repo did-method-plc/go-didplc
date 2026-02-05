@@ -138,13 +138,13 @@ func run(ctx context.Context, cmd *cli.Command) error {
 
 	if postgresURL != "" {
 		slog.Info("using database", "type", "postgres", "url", postgresURL)
-		store, err = replica.NewDBOpStoreWithPostgres(postgresURL, logger)
+		store, err = replica.NewGormOpStoreWithPostgres(postgresURL, logger)
 		if err != nil {
 			return fmt.Errorf("failed to create postgres store: %w", err)
 		}
 	} else {
 		slog.Info("using database", "type", "sqlite", "path", sqlitePath)
-		store, err = replica.NewDBOpStoreWithSqlite(sqlitePath, logger)
+		store, err = replica.NewGormOpStoreWithSqlite(sqlitePath, logger)
 		if err != nil {
 			return fmt.Errorf("failed to create sqlite store: %w", err)
 		}

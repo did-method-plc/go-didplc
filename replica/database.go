@@ -50,8 +50,8 @@ type GormOpStore struct {
 
 var _ didplc.OpStore = (*GormOpStore)(nil)
 
-// NewDBOpStoreWithDialector creates a new database-backed operation store with a custom dialector
-func NewDBOpStoreWithDialector(dialector gorm.Dialector, logger *slog.Logger) (*GormOpStore, error) {
+// NewGormOpStoreWithDialector creates a new database-backed operation store with a custom dialector
+func NewGormOpStoreWithDialector(dialector gorm.Dialector, logger *slog.Logger) (*GormOpStore, error) {
 	db, err := gorm.Open(dialector, &gorm.Config{
 		SkipDefaultTransaction: true,
 		//PrepareStmt:            true, // Doesn't seem to work well with postgres
@@ -87,14 +87,14 @@ func NewDBOpStoreWithDialector(dialector gorm.Dialector, logger *slog.Logger) (*
 	}, nil
 }
 
-func NewDBOpStoreWithSqlite(dbPath string, logger *slog.Logger) (*GormOpStore, error) {
-	return NewDBOpStoreWithDialector(
+func NewGormOpStoreWithSqlite(dbPath string, logger *slog.Logger) (*GormOpStore, error) {
+	return NewGormOpStoreWithDialector(
 		sqlite.Open(dbPath+"?mode=rwc&cache=shared&_journal_mode=WAL"),
 		logger,
 	)
 }
 
-func NewDBOpStoreWithPostgres(dsn string, logger *slog.Logger) (*GormOpStore, error) {
+func NewGormOpStoreWithPostgres(dsn string, logger *slog.Logger) (*GormOpStore, error) {
 	u, err := url.Parse(dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse postgres URL: %w", err)
@@ -105,7 +105,7 @@ func NewDBOpStoreWithPostgres(dsn string, logger *slog.Logger) (*GormOpStore, er
 		q.Set("synchronous_commit", "off")
 	}
 	u.RawQuery = q.Encode()
-	return NewDBOpStoreWithDialector(
+	return NewGormOpStoreWithDialector(
 		postgres.Open(u.String()),
 		logger,
 	)
@@ -113,15 +113,35 @@ func NewDBOpStoreWithPostgres(dsn string, logger *slog.Logger) (*GormOpStore, er
 
 // GetLatest implements didplc.OpStore
 func (db *GormOpStore) GetLatest(ctx context.Context, did string) (*didplc.OpEntry, error) {
-	var head Head
-	result := db.db.WithContext(ctx).Select("cid").Where("did = ?", did).Take(&head)
+	var opRec OperationRecord
+	result := db.db.WithContext(ctx).
+		Joins("JOIN heads ON heads.did = operations.did AND heads.cid = operations.cid").
+		Where("operations.did = ?", did).
+		Take(&opRec)
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
 			return nil, nil // DID not found
 		}
 		return nil, fmt.Errorf("database error: %w", result.Error)
 	}
-	return db.GetEntry(ctx, did, head.CID) // TODO: Optimize this into a single db call
+
+	operation := opRec.OpData.AsOperation()
+	if operation == nil {
+		return nil, fmt.Errorf("invalid operation type")
+	}
+
+	rotationKeys := operation.EquivalentRotationKeys()
+	allowedKeys := rotationKeys[:opRec.AllowedKeysCount]
+
+	return &didplc.OpEntry{
+		DID:         opRec.DID,
+		CreatedAt:   opRec.CreatedAt,
+		Nullified:   opRec.Nullified,
+		LastChild:   opRec.LastChild,
+		AllowedKeys: allowedKeys,
+		Op:          operation,
+		OpCid:       opRec.CID,
+	}, nil
 }
 
 // GetEntry implements didplc.OpStore

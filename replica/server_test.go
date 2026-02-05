@@ -19,7 +19,7 @@ import (
 func newTestServer(t *testing.T) (http.Handler, *GormOpStore) {
 	t.Helper()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	store, err := NewDBOpStoreWithDialector(sqlite.Open(":memory:"), logger)
+	store, err := NewGormOpStoreWithDialector(sqlite.Open(":memory:"), logger)
 	require.NoError(t, err)
 	sqlDB, err := store.db.DB()
 	require.NoError(t, err)
