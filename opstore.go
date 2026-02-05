@@ -2,10 +2,13 @@ package didplc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 )
+
+var ErrNotImplemented = errors.New("not implemented")
 
 type OpEntry struct {
 	DID         string
@@ -30,20 +33,27 @@ type PreparedOperation struct {
 
 type OpStore interface {
 	// GetEntry returns metadata about a specific operation, plus the operation itself.
-	// Returns nil if the DID does not exist (NOT an error).
+	// Returns nil if the DID does not exist.
 	GetEntry(ctx context.Context, did string, cid string) (*OpEntry, error)
 
 	// Like GetEntry, but returns the data for the most recent valid operation for a DID.
-	// Returns nil if the DID does not exist (NOT an error).
+	// Returns nil if the DID does not exist.
 	GetLatest(ctx context.Context, did string) (*OpEntry, error)
+
+	// Returns all enties for a given DID, including those which are nullified.
+	// Returns nil or empty slice if the DID does not exist.
+	// An implementation may choose not to implement this method, returning ErrNotImplemented if so.
+	GetAllEntries(ctx context.Context, did string) ([]*OpEntry, error)
 
 	// CommitOperations atomically commits a batch of prepared operations to the store.
 	// All operations in the batch are committed, or none are (all-or-nothing).
 	// It is invalid to have multiple operations for the same DID in the same batch.
 	//
-	// For each PreparedOperation, `prevHead` MUST match the OpCid value returned by an earlier call to GetLatest. Or if GetLatest returned nil, `prevHead` must be "".
-	// PreparedOperations created via VerifyOperation() will always have `prevHead` set appropriately.
-	// If multiple updates to the same DID are attempted concurrently, one will return an error due to head mismatch.
+	// For each PreparedOperation, `PrevHead` MUST match the `OpCid` value returned by an earlier call to GetLatest (Or "" if GetLatest returned nil).
+	// PreparedOperations returned by VerifyOperation() will always have `PrevHead` set appropriately.
+	//
+	// If any changes are made to a DID in the time between VerifyOperation() and a corresponding call to CommitOperations(),
+	// then CommitOperations() will fail due to head mismatch.
 	CommitOperations(ctx context.Context, ops []*PreparedOperation) error
 }
 
@@ -90,6 +100,11 @@ func (store *MemOpStore) GetEntry(ctx context.Context, did string, cid string) (
 	}
 
 	return status, nil
+}
+
+func (store *MemOpStore) GetAllEntries(ctx context.Context, did string) ([]*OpEntry, error) {
+	// MemOpStore's storage format is not suited to implementing this method
+	return nil, ErrNotImplemented
 }
 
 // CommitOperations atomically commits a batch of prepared operations to the store.
