@@ -51,7 +51,7 @@ func VerifyOpLog(entries []LogEntry) error {
 	}
 
 	did := entries[0].DID
-	os := NewInMemoryOpStore()
+	mos := NewMemOpStore()
 	ctx := context.Background()
 
 	for _, oe := range entries {
@@ -72,7 +72,7 @@ func VerifyOpLog(entries []LogEntry) error {
 		}
 		timestamp := datetime.Time()
 
-		po, err := VerifyOperation(ctx, os, did, op, timestamp)
+		po, err := VerifyOperation(ctx, mos, did, op, timestamp)
 		if err != nil {
 			return err
 		}
@@ -81,7 +81,7 @@ func VerifyOpLog(entries []LogEntry) error {
 			return fmt.Errorf("inconsistent CID")
 		}
 
-		err = os.CommitOperations(ctx, []*PreparedOperation{po})
+		err = mos.CommitOperations(ctx, []*PreparedOperation{po})
 		if err != nil {
 			return err
 		}
@@ -95,7 +95,7 @@ func VerifyOpLog(entries []LogEntry) error {
 				return fmt.Errorf("genesis op cannot be nullified")
 			}
 		}
-		status, err := os.GetMetadata(ctx, did, oe.CID)
+		status, err := mos.GetMetadata(ctx, did, oe.CID)
 		if err != nil {
 			return err
 		}

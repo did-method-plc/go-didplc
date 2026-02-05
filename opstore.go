@@ -47,15 +47,15 @@ type OpStore interface {
 	CommitOperations(ctx context.Context, ops []*PreparedOperation) error
 }
 
-type InMemoryOpStore struct {
+type MemOpStore struct {
 	head       map[string]string    // DID -> CID (head)
 	opStatus   map[string]*OpStatus // CID -> OpStatus (metadata)
 	operations map[string]Operation // CID -> Operation
 	lock       sync.RWMutex
 }
 
-func NewInMemoryOpStore() *InMemoryOpStore {
-	return &InMemoryOpStore{
+func NewMemOpStore() *MemOpStore {
+	return &MemOpStore{
 		head:       make(map[string]string),
 		opStatus:   make(map[string]*OpStatus),
 		operations: make(map[string]Operation),
@@ -64,7 +64,7 @@ func NewInMemoryOpStore() *InMemoryOpStore {
 
 // GetHead returns the CID of the most recent valid operation for a DID.
 // Returns empty string if the DID does not exist.
-func (store *InMemoryOpStore) GetHead(ctx context.Context, did string) (string, error) {
+func (store *MemOpStore) GetHead(ctx context.Context, did string) (string, error) {
 	store.lock.RLock()
 	defer store.lock.RUnlock()
 
@@ -78,7 +78,7 @@ func (store *InMemoryOpStore) GetHead(ctx context.Context, did string) (string, 
 // GetMetadata returns metadata about a specific operation.
 // Returns an error if the operation does not exist or belongs to a different DID.
 // The returned OpStatus is a copy and safe for mutation.
-func (store *InMemoryOpStore) GetMetadata(ctx context.Context, did string, cid string) (*OpStatus, error) {
+func (store *MemOpStore) GetMetadata(ctx context.Context, did string, cid string) (*OpStatus, error) {
 	store.lock.RLock()
 	defer store.lock.RUnlock()
 
@@ -97,7 +97,7 @@ func (store *InMemoryOpStore) GetMetadata(ctx context.Context, did string, cid s
 
 // GetOperation returns the operation data for a specific DID and CID.
 // Returns an error if the operation does not exist or belongs to a different DID.
-func (store *InMemoryOpStore) GetOperation(ctx context.Context, did string, cid string) (Operation, error) {
+func (store *MemOpStore) GetOperation(ctx context.Context, did string, cid string) (Operation, error) {
 	store.lock.RLock()
 	defer store.lock.RUnlock()
 
@@ -123,7 +123,7 @@ func (store *InMemoryOpStore) GetOperation(ctx context.Context, did string, cid 
 
 // CommitOperations atomically commits a batch of prepared operations to the store.
 // All operations in the batch are committed or none are (all-or-nothing).
-func (store *InMemoryOpStore) CommitOperations(ctx context.Context, ops []*PreparedOperation) error {
+func (store *MemOpStore) CommitOperations(ctx context.Context, ops []*PreparedOperation) error {
 	store.lock.Lock()
 	defer store.lock.Unlock()
 
