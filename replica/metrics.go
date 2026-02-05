@@ -24,37 +24,37 @@ var (
 
 func init() {
 	var err error
-	IngestCursorGauge, err = meter.Int64Gauge("plc.replica.ingest_cursor",
+	IngestCursorGauge, err = meter.Int64Gauge("plc_replica_ingest_cursor",
 		metric.WithDescription("The most recently committed seq value"),
 	)
 	if err != nil {
 		panic(err)
 	}
-	IngestedOpsQueueGauge, err = meter.Int64Gauge("plc.replica.ingested_ops_queue",
+	IngestedOpsQueueGauge, err = meter.Int64Gauge("plc_replica_ingested_ops_queue",
 		metric.WithDescription("Number of items in the ingested ops channel"),
 	)
 	if err != nil {
 		panic(err)
 	}
-	SeqOpsQueueGauge, err = meter.Int64Gauge("plc.replica.seq_ops_queue",
+	SeqOpsQueueGauge, err = meter.Int64Gauge("plc_replica_seq_ops_queue",
 		metric.WithDescription("Number of items in the sequenced ops channel"),
 	)
 	if err != nil {
 		panic(err)
 	}
-	ValidatedOpsQueueGauge, err = meter.Int64Gauge("plc.replica.validated_ops_queue",
+	ValidatedOpsQueueGauge, err = meter.Int64Gauge("plc_replica_validated_ops_queue",
 		metric.WithDescription("Number of items in the validated ops channel"),
 	)
 	if err != nil {
 		panic(err)
 	}
-	IngestStateGauge, err = meter.Int64Gauge("plc.replica.ingest_state",
+	IngestStateGauge, err = meter.Int64Gauge("plc_replica_ingest_state",
 		metric.WithDescription("Current ingest mode: 1 with state attribute (stream or paginated)"),
 	)
 	if err != nil {
 		panic(err)
 	}
-	LastIngestedOpTsGauge, err = meter.Int64Gauge("plc.replica.last_ingested_op_ts",
+	LastIngestedOpTsGauge, err = meter.Int64Gauge("plc_replica_last_ingested_op_ts",
 		metric.WithDescription("Unix timestamp of the most recently ingested operation"),
 		metric.WithUnit("s"),
 	)
