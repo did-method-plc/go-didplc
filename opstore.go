@@ -285,10 +285,8 @@ func VerifyOperation(ctx context.Context, store OpStore, did string, op Operatio
 		// Validate 72h constraint and build nullification list
 		nullifiedOps := []string{}
 		currentCid := prevStatus.LastChild
-		isFirstIteration := true
 
 		for currentCid != "" {
-			nullifiedOps = append(nullifiedOps, currentCid)
 			status, err := store.GetEntry(ctx, did, currentCid)
 			if err != nil {
 				return nil, false, err
@@ -297,15 +295,15 @@ func VerifyOperation(ctx context.Context, store OpStore, did string, op Operatio
 				return nil, false, fmt.Errorf("failed to walk nullification chain")
 			}
 
-			// Check 72h constraint for the first (oldest) nullified operation
-			if isFirstIteration {
-				if createdAt.Sub(status.CreatedAt) > 72*time.Hour {
-					return nil, true, fmt.Errorf("cannot nullify op after 72h (%s - %s = %s)",
-						createdAt, status.CreatedAt, createdAt.Sub(status.CreatedAt))
-				}
-				isFirstIteration = false
+			// Check 72h constraint
+			// (this check is only relevant on the first iteration, since each
+			// subsequent iteration should be even more recent)
+			if createdAt.Sub(status.CreatedAt) > 72*time.Hour {
+				return nil, true, fmt.Errorf("cannot nullify op after 72h (%s - %s = %s)",
+					createdAt, status.CreatedAt, createdAt.Sub(status.CreatedAt))
 			}
 
+			nullifiedOps = append(nullifiedOps, currentCid)
 			currentCid = status.LastChild
 		}
 
