@@ -90,7 +90,7 @@ func run(ctx context.Context, cmd *cli.Command) error {
 	// Parse configuration
 	postgresURL := cmd.String("postgres-url")
 	sqlitePath := cmd.String("sqlite-path")
-	httpAddr := cmd.String("http-addr")
+	httpAddr := cmd.String("bind")
 	metricsAddr := cmd.String("metrics-addr")
 	noIngest := cmd.Bool("no-ingest")
 	directoryURL := cmd.String("upstream-directory-url")
