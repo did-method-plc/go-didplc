@@ -83,7 +83,7 @@ func commitGenesis(t *testing.T, ctx context.Context, store didplc.OpStore, op *
 func TestValidateInner_GenesisValid(t *testing.T) {
 	assert := assert.New(t)
 	ctx := context.Background()
-	store := didplc.NewInMemoryOpStore()
+	store := didplc.NewMemOpStore()
 
 	priv, pubKey := generateKey(t)
 	op, did := createGenesis(t, priv, []string{pubKey})
@@ -107,7 +107,7 @@ func TestValidateInner_GenesisValid(t *testing.T) {
 func TestValidateInner_GenesisDIDMismatch(t *testing.T) {
 	assert := assert.New(t)
 	ctx := context.Background()
-	store := didplc.NewInMemoryOpStore()
+	store := didplc.NewMemOpStore()
 
 	priv, pubKey := generateKey(t)
 	op, _ := createGenesis(t, priv, []string{pubKey})
@@ -128,7 +128,7 @@ func TestValidateInner_GenesisDIDMismatch(t *testing.T) {
 func TestValidateInner_GenesisCIDMismatch(t *testing.T) {
 	assert := assert.New(t)
 	ctx := context.Background()
-	store := didplc.NewInMemoryOpStore()
+	store := didplc.NewMemOpStore()
 
 	priv, pubKey := generateKey(t)
 	op, did := createGenesis(t, priv, []string{pubKey})
@@ -149,7 +149,7 @@ func TestValidateInner_GenesisCIDMismatch(t *testing.T) {
 func TestValidateInner_GenesisDuplicateDID(t *testing.T) {
 	assert := assert.New(t)
 	ctx := context.Background()
-	store := didplc.NewInMemoryOpStore()
+	store := didplc.NewMemOpStore()
 
 	priv, pubKey := generateKey(t)
 	op, did := createGenesis(t, priv, []string{pubKey})
@@ -175,7 +175,7 @@ func TestValidateInner_GenesisDuplicateDID(t *testing.T) {
 func TestValidateInner_UpdateValid(t *testing.T) {
 	assert := assert.New(t)
 	ctx := context.Background()
-	store := didplc.NewInMemoryOpStore()
+	store := didplc.NewMemOpStore()
 
 	priv, pubKey := generateKey(t)
 	genesis, did := createGenesis(t, priv, []string{pubKey})
@@ -203,7 +203,7 @@ func TestValidateInner_UpdateValid(t *testing.T) {
 func TestValidateInner_UpdateTimestampNotAdvanced(t *testing.T) {
 	assert := assert.New(t)
 	ctx := context.Background()
-	store := didplc.NewInMemoryOpStore()
+	store := didplc.NewMemOpStore()
 
 	priv, pubKey := generateKey(t)
 	genesis, did := createGenesis(t, priv, []string{pubKey})
@@ -229,7 +229,7 @@ func TestValidateInner_UpdateTimestampNotAdvanced(t *testing.T) {
 func TestValidateInner_UpdateWrongSignatureKey(t *testing.T) {
 	assert := assert.New(t)
 	ctx := context.Background()
-	store := didplc.NewInMemoryOpStore()
+	store := didplc.NewMemOpStore()
 
 	priv1, pubKey1 := generateKey(t)
 	genesis, did := createGenesis(t, priv1, []string{pubKey1})
@@ -257,7 +257,7 @@ func TestValidateInner_UpdateWrongSignatureKey(t *testing.T) {
 func TestValidateInner_UpdateNonexistentDID(t *testing.T) {
 	assert := assert.New(t)
 	ctx := context.Background()
-	store := didplc.NewInMemoryOpStore()
+	store := didplc.NewMemOpStore()
 
 	priv, pubKey := generateKey(t)
 	prevCID := "bafyreifakecid"
@@ -279,7 +279,7 @@ func TestValidateInner_UpdateNonexistentDID(t *testing.T) {
 func TestValidateInner_Nullification(t *testing.T) {
 	assert := assert.New(t)
 	ctx := context.Background()
-	store := didplc.NewInMemoryOpStore()
+	store := didplc.NewMemOpStore()
 
 	// nullification requires two rotation keys: a recovery key (index 0)
 	// and a regular key (index 1). The regular update uses key 1, which
@@ -322,7 +322,7 @@ func TestValidateInner_Nullification(t *testing.T) {
 func TestValidateInner_NullificationTooSlow(t *testing.T) {
 	assert := assert.New(t)
 	ctx := context.Background()
-	store := didplc.NewInMemoryOpStore()
+	store := didplc.NewMemOpStore()
 
 	privRecovery, pubKeyRecovery := generateKey(t)
 	priv, pubKey := generateKey(t)
@@ -359,7 +359,7 @@ func TestValidateInner_NullificationTooSlow(t *testing.T) {
 func TestValidateInner_Tombstone(t *testing.T) {
 	assert := assert.New(t)
 	ctx := context.Background()
-	store := didplc.NewInMemoryOpStore()
+	store := didplc.NewMemOpStore()
 
 	priv, pubKey := generateKey(t)
 	genesis, did := createGenesis(t, priv, []string{pubKey})
@@ -389,7 +389,7 @@ func TestValidateInner_Tombstone(t *testing.T) {
 func TestValidateWorker_ValidOp(t *testing.T) {
 	assert := assert.New(t)
 	ctx := context.Background()
-	store := didplc.NewInMemoryOpStore()
+	store := didplc.NewMemOpStore()
 	infl := NewInFlight(-1)
 
 	priv, pubKey := generateKey(t)
@@ -425,7 +425,7 @@ func TestValidateWorker_ValidOp(t *testing.T) {
 func TestValidateWorker_InvalidOp(t *testing.T) {
 	assert := assert.New(t)
 	ctx := context.Background()
-	store := didplc.NewInMemoryOpStore()
+	store := didplc.NewMemOpStore()
 	infl := NewInFlight(-1)
 
 	priv, pubKey := generateKey(t)
@@ -462,7 +462,7 @@ func TestValidateWorker_InvalidOp(t *testing.T) {
 func TestCommitWorker_CommitsBatch(t *testing.T) {
 	assert := assert.New(t)
 	ctx := context.Background()
-	store := didplc.NewInMemoryOpStore()
+	store := didplc.NewMemOpStore()
 	infl := NewInFlight(-1)
 
 	priv, pubKey := generateKey(t)
@@ -492,9 +492,9 @@ func TestCommitWorker_CommitsBatch(t *testing.T) {
 	<-done
 
 	// verify it was committed
-	head, err := store.GetHead(ctx, did)
+	head, err := store.GetLatest(ctx, did)
 	assert.NoError(err)
-	assert.Equal(op.CID().String(), head)
+	assert.Equal(op.CID().String(), head.OpCid)
 
 	// close to stop the worker and wait for it to exit
 	close(validatedOps)
@@ -507,7 +507,7 @@ func TestCommitWorker_CommitsBatch(t *testing.T) {
 func TestCommitWorker_FlushOnClose(t *testing.T) {
 	assert := assert.New(t)
 	ctx := context.Background()
-	store := didplc.NewInMemoryOpStore()
+	store := didplc.NewMemOpStore()
 	infl := NewInFlight(-1)
 
 	priv, pubKey := generateKey(t)
@@ -527,15 +527,15 @@ func TestCommitWorker_FlushOnClose(t *testing.T) {
 	// run synchronously — CommitWorker returns when channel is closed
 	CommitWorker(ctx, validatedOps, infl, store, flushCh)
 
-	head, err := store.GetHead(ctx, did)
+	head, err := store.GetLatest(ctx, did)
 	assert.NoError(err)
-	assert.Equal(op.CID().String(), head)
+	assert.Equal(op.CID().String(), head.OpCid)
 }
 
 func TestEndToEnd_MultipleOps(t *testing.T) {
 	assert := assert.New(t)
 	ctx := context.Background()
-	store := didplc.NewInMemoryOpStore()
+	store := didplc.NewMemOpStore()
 	infl := NewInFlight(-1)
 
 	priv, pubKey := generateKey(t)
@@ -584,15 +584,15 @@ func TestEndToEnd_MultipleOps(t *testing.T) {
 	_ = flushCh // unused in this test path
 
 	// verify head updated
-	head, err := store.GetHead(ctx, did)
+	head, err := store.GetLatest(ctx, did)
 	assert.NoError(err)
-	assert.Equal(update.CID().String(), head)
+	assert.Equal(update.CID().String(), head.OpCid)
 }
 
 func TestValidateInner_RotationKeyChange(t *testing.T) {
 	assert := assert.New(t)
 	ctx := context.Background()
-	store := didplc.NewInMemoryOpStore()
+	store := didplc.NewMemOpStore()
 
 	priv1, pubKey1 := generateKey(t)
 	priv2, pubKey2 := generateKey(t)

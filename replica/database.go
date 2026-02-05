@@ -111,21 +111,21 @@ func NewDBOpStoreWithPostgres(dsn string, logger *slog.Logger) (*DBOpStore, erro
 	)
 }
 
-// GetHead implements didplc.OpStore
-func (db *DBOpStore) GetHead(ctx context.Context, did string) (string, error) {
+// GetLatest implements didplc.OpStore
+func (db *DBOpStore) GetLatest(ctx context.Context, did string) (*didplc.OpEntry, error) {
 	var head Head
 	result := db.db.WithContext(ctx).Select("cid").Where("did = ?", did).Take(&head)
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
-			return "", nil // DID not found
+			return nil, nil // DID not found
 		}
-		return "", fmt.Errorf("database error: %w", result.Error)
+		return nil, fmt.Errorf("database error: %w", result.Error)
 	}
-	return head.CID, nil
+	return db.GetEntry(ctx, did, head.CID) // TODO: Optimize this into a single db call
 }
 
-// GetMetadata implements didplc.OpStore
-func (db *DBOpStore) GetMetadata(ctx context.Context, did string, cid string) (*didplc.OpStatus, error) {
+// GetEntry implements didplc.OpStore
+func (db *DBOpStore) GetEntry(ctx context.Context, did string, cid string) (*didplc.OpEntry, error) {
 	var opRec OperationRecord
 	result := db.db.WithContext(ctx).Where("did = ? AND cid = ?", did, cid).Take(&opRec)
 	if result.Error != nil {
@@ -145,32 +145,15 @@ func (db *DBOpStore) GetMetadata(ctx context.Context, did string, cid string) (*
 	rotationKeys := operation.EquivalentRotationKeys()
 	allowedKeys := rotationKeys[:opRec.AllowedKeysCount]
 
-	return &didplc.OpStatus{
+	return &didplc.OpEntry{
 		DID:         opRec.DID,
 		CreatedAt:   opRec.CreatedAt,
 		Nullified:   opRec.Nullified,
 		LastChild:   opRec.LastChild,
 		AllowedKeys: allowedKeys,
+		Op:          operation,
+		OpCid:       cid,
 	}, nil
-}
-
-// GetOperation implements didplc.OpStore
-func (db *DBOpStore) GetOperation(ctx context.Context, did string, cid string) (didplc.Operation, error) {
-	var opRec OperationRecord
-	result := db.db.WithContext(ctx).Select("op_data").Where("did = ? AND cid = ?", did, cid).Take(&opRec)
-	if result.Error != nil {
-		if result.Error == gorm.ErrRecordNotFound {
-			return nil, fmt.Errorf("operation not found")
-		}
-		return nil, fmt.Errorf("database error: %w", result.Error)
-	}
-
-	operation := opRec.OpData.AsOperation()
-	if operation == nil {
-		return nil, fmt.Errorf("invalid operation type")
-	}
-
-	return operation, nil
 }
 
 // CommitOperations implements didplc.OpStore

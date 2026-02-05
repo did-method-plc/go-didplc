@@ -78,26 +78,19 @@ func writeJSONError(w http.ResponseWriter, message string, status int) {
 func (s *Server) handleDIDDoc(w http.ResponseWriter, r *http.Request) {
 	did := r.PathValue("did")
 	ctx := r.Context()
-	// Get the head CID for this DID
-	headCID, err := s.store.GetHead(ctx, did)
+
+	head, err := s.store.GetLatest(ctx, did)
 	if err != nil {
 		writeJSONError(w, fmt.Sprintf("error fetching head: %v", err), http.StatusInternalServerError)
 		return
 	}
-	if headCID == "" {
+	if head == nil {
 		writeJSONError(w, fmt.Sprintf("DID not registered: %s", did), http.StatusNotFound)
 		return
 	}
 
-	// Get the operation data
-	op, err := s.store.GetOperation(ctx, did, headCID)
-	if err != nil {
-		writeJSONError(w, fmt.Sprintf("error fetching operation: %v", err), http.StatusInternalServerError)
-		return
-	}
-
 	// Generate DID document
-	doc, err := op.Doc(did)
+	doc, err := head.Op.Doc(did)
 	if err != nil {
 		writeJSONError(w, fmt.Sprintf("error generating DID document: %v", err), http.StatusInternalServerError)
 		return
@@ -114,21 +107,14 @@ func (s *Server) handleDIDDoc(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleDIDData(w http.ResponseWriter, r *http.Request) {
 	did := r.PathValue("did")
 	ctx := r.Context()
-	// Get the head CID for this DID
-	headCID, err := s.store.GetHead(ctx, did)
+
+	head, err := s.store.GetLatest(ctx, did)
 	if err != nil {
 		writeJSONError(w, fmt.Sprintf("error fetching head: %v", err), http.StatusInternalServerError)
 		return
 	}
-	if headCID == "" {
+	if head == nil {
 		writeJSONError(w, fmt.Sprintf("DID not registered: %s", did), http.StatusNotFound)
-		return
-	}
-
-	// Get the operation data
-	op, err := s.store.GetOperation(ctx, did, headCID)
-	if err != nil {
-		writeJSONError(w, fmt.Sprintf("error fetching operation: %v", err), http.StatusInternalServerError)
 		return
 	}
 
@@ -136,7 +122,7 @@ func (s *Server) handleDIDData(w http.ResponseWriter, r *http.Request) {
 	var resp DIDDataResponse
 	resp.DID = did
 
-	switch v := op.(type) {
+	switch v := head.Op.(type) {
 	case *didplc.RegularOp:
 		resp.RotationKeys = v.RotationKeys
 		resp.VerificationMethods = v.VerificationMethods
@@ -218,25 +204,18 @@ func (s *Server) handleDIDLogLast(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// Get the head CID for this DID
-	headCID, err := s.store.GetHead(ctx, did)
+	head, err := s.store.GetLatest(ctx, did)
 	if err != nil {
 		writeJSONError(w, fmt.Sprintf("error fetching head: %v", err), http.StatusInternalServerError)
 		return
 	}
-	if headCID == "" {
+	if head == nil {
 		writeJSONError(w, fmt.Sprintf("DID not registered: %s", did), http.StatusNotFound)
 		return
 	}
 
-	// Get the operation data
-	op, err := s.store.GetOperation(ctx, did, headCID)
-	if err != nil {
-		writeJSONError(w, fmt.Sprintf("error fetching operation: %v", err), http.StatusInternalServerError)
-		return
-	}
-
 	// Wrap the operation in OpEnum for proper JSON marshaling
-	opEnum, err := didplc.WrapOperation(op)
+	opEnum, err := didplc.WrapOperation(head.Op)
 	if err != nil {
 		writeJSONError(w, fmt.Sprintf("error wrapping operation: %v", err), http.StatusInternalServerError)
 		return
