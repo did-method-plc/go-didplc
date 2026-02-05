@@ -74,7 +74,7 @@ func createUpdate(t *testing.T, priv atcrypto.PrivateKey, rotationKeys []string,
 // helper: commit a genesis op to the store and return its CID
 func commitGenesis(t *testing.T, ctx context.Context, store didplc.OpStore, op *didplc.RegularOp, did string, createdAt time.Time) string {
 	t.Helper()
-	prepOp, err := didplc.VerifyOperation(ctx, store, did, op, createdAt)
+	prepOp, _, err := didplc.VerifyOperation(ctx, store, did, op, createdAt)
 	require.NoError(t, err)
 	require.NoError(t, store.CommitOperations(ctx, []*didplc.PreparedOperation{prepOp}))
 	return prepOp.OpCid
@@ -295,7 +295,7 @@ func TestValidateInner_Nullification(t *testing.T) {
 	// create and commit a regular update signed by key at index 1
 	update1 := createUpdate(t, priv, rotationKeys, genesisCID)
 	t1 := t0.Add(time.Hour)
-	prepOp1, err := didplc.VerifyOperation(ctx, store, did, update1, t1)
+	prepOp1, _, err := didplc.VerifyOperation(ctx, store, did, update1, t1)
 	require.NoError(t, err)
 	require.Equal(t, 1, prepOp1.KeyIndex)
 	require.NoError(t, store.CommitOperations(ctx, []*didplc.PreparedOperation{prepOp1}))
@@ -335,7 +335,7 @@ func TestValidateInner_NullificationTooSlow(t *testing.T) {
 	// create and commit a regular update signed by key at index 1
 	update1 := createUpdate(t, priv, rotationKeys, genesisCID)
 	t1 := t0.Add(time.Hour)
-	prepOp1, err := didplc.VerifyOperation(ctx, store, did, update1, t1)
+	prepOp1, _, err := didplc.VerifyOperation(ctx, store, did, update1, t1)
 	require.NoError(t, err)
 	require.NoError(t, store.CommitOperations(ctx, []*didplc.PreparedOperation{prepOp1}))
 
@@ -469,7 +469,7 @@ func TestCommitWorker_CommitsBatch(t *testing.T) {
 	op, did := createGenesis(t, priv, []string{pubKey})
 	now := time.Now()
 
-	prepOp, err := didplc.VerifyOperation(ctx, store, did, op, now)
+	prepOp, _, err := didplc.VerifyOperation(ctx, store, did, op, now)
 	require.NoError(t, err)
 
 	validatedOps := make(chan ValidatedOp) // unbuffered: send blocks until worker reads
@@ -514,7 +514,7 @@ func TestCommitWorker_FlushOnClose(t *testing.T) {
 	op, did := createGenesis(t, priv, []string{pubKey})
 	now := time.Now()
 
-	prepOp, err := didplc.VerifyOperation(ctx, store, did, op, now)
+	prepOp, _, err := didplc.VerifyOperation(ctx, store, did, op, now)
 	require.NoError(t, err)
 
 	validatedOps := make(chan ValidatedOp, 1)
@@ -543,7 +543,7 @@ func TestEndToEnd_MultipleOps(t *testing.T) {
 	t0 := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 
 	// validate and commit genesis
-	genesisPrepOp, err := didplc.VerifyOperation(ctx, store, did, genesis, t0)
+	genesisPrepOp, _, err := didplc.VerifyOperation(ctx, store, did, genesis, t0)
 	require.NoError(t, err)
 	require.NoError(t, store.CommitOperations(ctx, []*didplc.PreparedOperation{genesisPrepOp}))
 	genesisCID := genesisPrepOp.OpCid

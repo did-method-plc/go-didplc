@@ -72,7 +72,7 @@ func VerifyOpLog(entries []LogEntry) error {
 		}
 		timestamp := datetime.Time()
 
-		po, err := VerifyOperation(ctx, mos, did, op, timestamp)
+		po, _, err := VerifyOperation(ctx, mos, did, op, timestamp)
 		if err != nil {
 			return err
 		}

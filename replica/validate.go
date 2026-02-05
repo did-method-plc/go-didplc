@@ -132,9 +132,28 @@ func CommitWorker(ctx context.Context, validatedOps <-chan ValidatedOp, infl *In
 }
 
 func validateInner(ctx context.Context, seqop *SequencedOp, store didplc.OpStore) (*didplc.PreparedOperation, error) {
-	prepOp, err := didplc.VerifyOperation(ctx, store, seqop.DID, seqop.Operation, seqop.CreatedAt)
-	if err != nil {
-		return nil, fmt.Errorf("failed verifying op %s, %s: %w", seqop.DID, seqop.CID, err)
+	var prepOp *didplc.PreparedOperation
+	var opIsInvalid bool
+	var err error
+
+	for {
+		prepOp, opIsInvalid, err = didplc.VerifyOperation(ctx, store, seqop.DID, seqop.Operation, seqop.CreatedAt)
+		if err != nil {
+			if opIsInvalid {
+				// Operation is definitely invalid - don't retry
+				return nil, fmt.Errorf("failed verifying op %s, %s: %w", seqop.DID, seqop.CID, err)
+			}
+
+			// Transient error (hopefully) - retry with sleep.
+			// If the db is down then waiting for it to come back is all we can do.
+			slog.Warn("failed verifying op, retrying", "did", seqop.DID, "cid", seqop.CID, "error", err)
+			if !sleepCtx(ctx, 1*time.Second) {
+				return nil, fmt.Errorf("context cancelled while retrying verification: %w", err)
+			}
+			continue
+		}
+
+		break // success
 	}
 
 	if prepOp.OpCid != seqop.CID {
