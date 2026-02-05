@@ -60,8 +60,8 @@ func NewMemOpStore() *MemOpStore {
 	}
 }
 
-// GetLatest returns the CID of the most recent valid operation for a DID.
-// Returns empty string if the DID does not exist.
+// GetLatest returns the entry for the most recent valid operation for a DID.
+// Returns nil if the DID does not exist.
 func (store *MemOpStore) GetLatest(ctx context.Context, did string) (*OpEntry, error) {
 	store.lock.RLock()
 	defer store.lock.RUnlock()
@@ -73,16 +73,15 @@ func (store *MemOpStore) GetLatest(ctx context.Context, did string) (*OpEntry, e
 	return store.GetEntry(ctx, did, head)
 }
 
-// GetEntry returns metadata about a specific operation.
-// Returns an error if the operation does not exist or belongs to a different DID.
-// The returned OpStatus is a copy and safe for mutation.
+// GetEntry returns the entry for a specific operation.
+// Returns nil if the operation does not exist.
 func (store *MemOpStore) GetEntry(ctx context.Context, did string, cid string) (*OpEntry, error) {
 	store.lock.RLock()
 	defer store.lock.RUnlock()
 
 	status, exists := store.entries[cid]
 	if !exists {
-		return nil, fmt.Errorf("operation not found")
+		return nil, nil
 	}
 
 	if status.DID != did {

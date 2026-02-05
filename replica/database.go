@@ -130,7 +130,7 @@ func (db *GormOpStore) GetEntry(ctx context.Context, did string, cid string) (*d
 	result := db.db.WithContext(ctx).Where("did = ? AND cid = ?", did, cid).Take(&opRec)
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
-			return nil, fmt.Errorf("operation not found")
+			return nil, nil
 		}
 		return nil, fmt.Errorf("database error: %w", result.Error)
 	}
