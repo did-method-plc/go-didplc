@@ -22,13 +22,13 @@ type DIDDataResponse struct {
 
 // Server holds the HTTP server and its dependencies
 type Server struct {
-	store  *DBOpStore
+	store  *GormOpStore
 	addr   string
 	logger *slog.Logger
 }
 
 // NewServer creates a new HTTP server
-func NewServer(store *DBOpStore, addr string, logger *slog.Logger) *Server {
+func NewServer(store *GormOpStore, addr string, logger *slog.Logger) *Server {
 	return &Server{
 		store:  store,
 		addr:   addr,

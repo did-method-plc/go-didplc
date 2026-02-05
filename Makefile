@@ -18,8 +18,7 @@ all: build
 
 .PHONY: test
 test: ## Run tests
-	go test -v -short ./didplc/...
-	go test -v ./replica/...
+	go test -v -short ./didplc/... ./replica/...
 
 .PHONY: coverage-html
 coverage-html: ## Generate test coverage report and open in browser

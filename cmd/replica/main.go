@@ -16,7 +16,7 @@ import (
 
 func main() {
 	cmd := &cli.Command{
-		Name:  "replica",
+		Name:  "plc-replica",
 		Usage: "PLC directory replica server",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
@@ -31,10 +31,10 @@ func main() {
 				Sources: cli.EnvVars("SQLITE_PATH"),
 			},
 			&cli.StringFlag{
-				Name:    "http-addr",
+				Name:    "bind",
 				Usage:   "HTTP server listen address",
 				Value:   ":8080",
-				Sources: cli.EnvVars("HTTP_ADDR"),
+				Sources: cli.EnvVars("REPLICA_BIND"),
 			},
 			&cli.StringFlag{
 				Name:    "metrics-addr",
@@ -134,7 +134,7 @@ func run(ctx context.Context, cmd *cli.Command) error {
 	}
 	defer otelShutdown(context.Background())
 
-	var store *replica.DBOpStore
+	var store *replica.GormOpStore
 
 	if postgresURL != "" {
 		slog.Info("using database", "type", "postgres", "url", postgresURL)

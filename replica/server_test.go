@@ -16,7 +16,7 @@ import (
 	"gorm.io/driver/sqlite"
 )
 
-func newTestServer(t *testing.T) (http.Handler, *DBOpStore) {
+func newTestServer(t *testing.T) (http.Handler, *GormOpStore) {
 	t.Helper()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	store, err := NewDBOpStoreWithDialector(sqlite.Open(":memory:"), logger)

@@ -91,7 +91,7 @@ var (
 // Ingestor streams operations from a PLC directory export endpoint,
 // validates them, and commits them to the local store.
 type Ingestor struct {
-	store              *DBOpStore
+	store              *GormOpStore
 	directoryURL       string
 	parsedDirectoryURL *url.URL
 	numWorkers         int
@@ -104,7 +104,7 @@ type Ingestor struct {
 
 // NewIngestor creates a new Ingestor. Pass startCursor == -1 to resume from
 // the cursor stored in the database.
-func NewIngestor(store *DBOpStore, directoryURL string, startCursor int64, numWorkers int, logger *slog.Logger) (*Ingestor, error) {
+func NewIngestor(store *GormOpStore, directoryURL string, startCursor int64, numWorkers int, logger *slog.Logger) (*Ingestor, error) {
 	parsedDirectoryURL, err := url.Parse(directoryURL)
 	if err != nil {
 		return nil, err

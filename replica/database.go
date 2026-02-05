@@ -43,15 +43,15 @@ type HostCursor struct {
 	Seq  int64  `gorm:"not null"`
 }
 
-// DBOpStore implements didplc.OpStore using a database backend
-type DBOpStore struct {
+// GormOpStore implements didplc.OpStore using a database backend
+type GormOpStore struct {
 	db *gorm.DB
 }
 
-var _ didplc.OpStore = (*DBOpStore)(nil)
+var _ didplc.OpStore = (*GormOpStore)(nil)
 
 // NewDBOpStoreWithDialector creates a new database-backed operation store with a custom dialector
-func NewDBOpStoreWithDialector(dialector gorm.Dialector, logger *slog.Logger) (*DBOpStore, error) {
+func NewDBOpStoreWithDialector(dialector gorm.Dialector, logger *slog.Logger) (*GormOpStore, error) {
 	db, err := gorm.Open(dialector, &gorm.Config{
 		SkipDefaultTransaction: true,
 		//PrepareStmt:            true, // Doesn't seem to work well with postgres
@@ -82,19 +82,19 @@ func NewDBOpStoreWithDialector(dialector gorm.Dialector, logger *slog.Logger) (*
 		return nil, fmt.Errorf("failed to migrate schema: %w", err)
 	}
 
-	return &DBOpStore{
+	return &GormOpStore{
 		db: db,
 	}, nil
 }
 
-func NewDBOpStoreWithSqlite(dbPath string, logger *slog.Logger) (*DBOpStore, error) {
+func NewDBOpStoreWithSqlite(dbPath string, logger *slog.Logger) (*GormOpStore, error) {
 	return NewDBOpStoreWithDialector(
 		sqlite.Open(dbPath+"?mode=rwc&cache=shared&_journal_mode=WAL"),
 		logger,
 	)
 }
 
-func NewDBOpStoreWithPostgres(dsn string, logger *slog.Logger) (*DBOpStore, error) {
+func NewDBOpStoreWithPostgres(dsn string, logger *slog.Logger) (*GormOpStore, error) {
 	u, err := url.Parse(dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse postgres URL: %w", err)
@@ -112,7 +112,7 @@ func NewDBOpStoreWithPostgres(dsn string, logger *slog.Logger) (*DBOpStore, erro
 }
 
 // GetLatest implements didplc.OpStore
-func (db *DBOpStore) GetLatest(ctx context.Context, did string) (*didplc.OpEntry, error) {
+func (db *GormOpStore) GetLatest(ctx context.Context, did string) (*didplc.OpEntry, error) {
 	var head Head
 	result := db.db.WithContext(ctx).Select("cid").Where("did = ?", did).Take(&head)
 	if result.Error != nil {
@@ -125,7 +125,7 @@ func (db *DBOpStore) GetLatest(ctx context.Context, did string) (*didplc.OpEntry
 }
 
 // GetEntry implements didplc.OpStore
-func (db *DBOpStore) GetEntry(ctx context.Context, did string, cid string) (*didplc.OpEntry, error) {
+func (db *GormOpStore) GetEntry(ctx context.Context, did string, cid string) (*didplc.OpEntry, error) {
 	var opRec OperationRecord
 	result := db.db.WithContext(ctx).Where("did = ? AND cid = ?", did, cid).Take(&opRec)
 	if result.Error != nil {
@@ -157,7 +157,7 @@ func (db *DBOpStore) GetEntry(ctx context.Context, did string, cid string) (*did
 }
 
 // CommitOperations implements didplc.OpStore
-func (db *DBOpStore) CommitOperations(ctx context.Context, ops []*didplc.PreparedOperation) error {
+func (db *GormOpStore) CommitOperations(ctx context.Context, ops []*didplc.PreparedOperation) error {
 	// Begin transaction
 	return db.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for _, prepOp := range ops {
@@ -237,7 +237,7 @@ func (db *DBOpStore) CommitOperations(ctx context.Context, ops []*didplc.Prepare
 }
 
 // Not part of the OpStore interface, used to implement the GET /did/log endpoint
-func (db *DBOpStore) GetOperationLog(ctx context.Context, did string) ([]*didplc.OpEnum, error) {
+func (db *GormOpStore) GetOperationLog(ctx context.Context, did string) ([]*didplc.OpEnum, error) {
 	var opRecs []OperationRecord
 
 	result := db.db.WithContext(ctx).Where("did = ?", did).Where("nullified = ?", false).Order("created_at ASC").Find(&opRecs)
@@ -254,7 +254,7 @@ func (db *DBOpStore) GetOperationLog(ctx context.Context, did string) ([]*didplc
 }
 
 // Not part of the OpStore interface, used to implement the GET /did/log/audit endpoint
-func (db *DBOpStore) GetOperationLogAudit(ctx context.Context, did string) ([]*didplc.LogEntry, error) {
+func (db *GormOpStore) GetOperationLogAudit(ctx context.Context, did string) ([]*didplc.LogEntry, error) {
 	var opRecs []OperationRecord
 
 	result := db.db.WithContext(ctx).Where("did = ?", did).Order("created_at ASC").Find(&opRecs)
@@ -277,7 +277,7 @@ func (db *DBOpStore) GetOperationLogAudit(ctx context.Context, did string) ([]*d
 	return entries, nil
 }
 
-func (db *DBOpStore) PutCursor(ctx context.Context, host string, seq int64) error {
+func (db *GormOpStore) PutCursor(ctx context.Context, host string, seq int64) error {
 	// upsert
 	result := db.db.WithContext(ctx).Clauses(clause.OnConflict{
 		UpdateAll: true,
@@ -289,7 +289,7 @@ func (db *DBOpStore) PutCursor(ctx context.Context, host string, seq int64) erro
 }
 
 // returns 0 if not found (since new hosts should start from 0)
-func (db *DBOpStore) GetCursor(ctx context.Context, host string) (int64, error) {
+func (db *GormOpStore) GetCursor(ctx context.Context, host string) (int64, error) {
 	var hostCursor HostCursor
 	result := db.db.WithContext(ctx).Where("host = ?", host).Take(&hostCursor)
 	if result.Error == gorm.ErrRecordNotFound {
