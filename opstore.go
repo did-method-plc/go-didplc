@@ -52,8 +52,8 @@ type OpStore interface {
 	// For each PreparedOperation, `PrevHead` MUST match the `OpCid` value returned by an earlier call to GetLatest (Or "" if GetLatest returned nil).
 	// PreparedOperations returned by VerifyOperation() will always have `PrevHead` set appropriately.
 	//
-	// If any changes are made to a DID in the time between VerifyOperation() and a corresponding call to CommitOperations(),
-	// then CommitOperations() will fail due to head mismatch.
+	// If any updates are made to a particular DID in the time between VerifyOperation() and a corresponding call to CommitOperations(),
+	// then CommitOperations() will error due to head mismatch.
 	CommitOperations(ctx context.Context, ops []*PreparedOperation) error
 }
 
