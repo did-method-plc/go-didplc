@@ -2,7 +2,6 @@ package didplc
 
 import (
 	"crypto/sha256"
-	"database/sql/driver"
 	"encoding/base32"
 	"encoding/base64"
 	"encoding/json"
@@ -483,31 +482,6 @@ func (o *OpEnum) UnmarshalJSON(b []byte) error {
 	default:
 		return fmt.Errorf("unexpected operation type: %s", typ)
 	}
-}
-
-// Value implements the driver.Valuer interface
-func (o OpEnum) Value() (driver.Value, error) {
-	// TODO: consider using CBOR here?
-	return o.MarshalJSON()
-}
-
-// Scan implements the sql.Scanner interface
-func (o *OpEnum) Scan(value interface{}) error {
-	if value == nil {
-		return nil
-	}
-
-	var bytes []byte
-	switch v := value.(type) {
-	case []byte:
-		bytes = v
-	case string:
-		bytes = []byte(v)
-	default:
-		return fmt.Errorf("failed to scan OpEnum: expected []byte or string, got %T", value)
-	}
-
-	return o.UnmarshalJSON(bytes)
 }
 
 // returns a new signed PLC operation using the provided atproto-specific metdata
