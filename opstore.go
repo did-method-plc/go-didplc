@@ -8,7 +8,16 @@ import (
 	"time"
 )
 
-var ErrNotImplemented = errors.New("not implemented")
+var (
+	// May be returned by GetAllEntries if unsupported by an implementation
+	ErrNotImplemented = errors.New("not implemented")
+
+	// May be returned by VerifyOperation (as a wrapped error)
+	ErrInvalidOperation = errors.New("invalid PLC operation")
+
+	// May be returned by CommitOperations (as a wrapped error)
+	ErrHeadMismatch = errors.New("head mismatch")
+)
 
 type OpEntry struct {
 	DID         string
@@ -53,18 +62,19 @@ type OpStore interface {
 	// PreparedOperations returned by VerifyOperation() will always have `PrevHead` set appropriately.
 	//
 	// If any updates are made to a particular DID in the time between VerifyOperation() and a corresponding call to CommitOperations(),
-	// then CommitOperations() will error due to head mismatch.
+	// then CommitOperations() will error due to head mismatch (ErrHeadMismatch).
 	CommitOperations(ctx context.Context, ops []*PreparedOperation) error
 }
 
 // VerifyOperation validates and prepares a single operation for commit.
 // It verifies the signature, validates timestamp consistency, and computes the nullification list.
 // On success, returns a PreparedOperation ready to be committed to the store.
-// On error, the returned boolean is true if the operation was *definitely* invalid, or false if the error was OpStore-related (e.g. transient database connection issue) and *may* be resolved by retrying.
-func VerifyOperation(ctx context.Context, store OpStore, did string, op Operation, createdAt time.Time) (*PreparedOperation, bool, error) {
-	head, prevStatus, opIsInvalid, err := getValidationContext(ctx, store, did, op.PrevCIDStr())
+// Errors wrapping ErrInvalidOperation indicate the operation is *definitely* invalid.
+// Other errors are OpStore-related (e.g. transient database connection issue) and *may* be resolved by retrying.
+func VerifyOperation(ctx context.Context, store OpStore, did string, op Operation, createdAt time.Time) (*PreparedOperation, error) {
+	head, prevStatus, err := getValidationContext(ctx, store, did, op.PrevCIDStr())
 	if err != nil {
-		return nil, opIsInvalid, err
+		return nil, err
 	}
 
 	// Determine allowed keys for signature verification
@@ -72,15 +82,15 @@ func VerifyOperation(ctx context.Context, store OpStore, did string, op Operatio
 	if op.IsGenesis() {
 		calcDid, err := op.DID()
 		if err != nil {
-			return nil, true, err
+			return nil, fmt.Errorf("%w: failed to calculate DID string: %v", ErrInvalidOperation, err)
 		}
 		if calcDid != did {
-			return nil, true, fmt.Errorf("genesis DID does not match")
+			return nil, fmt.Errorf("%w: genesis DID does not match", ErrInvalidOperation)
 		}
 		allowedKeys = op.EquivalentRotationKeys()
 	} else {
 		if prevStatus == nil {
-			return nil, true, fmt.Errorf("prevStatus required for non-genesis operation")
+			return nil, fmt.Errorf("%w: prevStatus required for non-genesis operation", ErrInvalidOperation)
 		}
 		allowedKeys = prevStatus.AllowedKeys
 	}
@@ -88,7 +98,7 @@ func VerifyOperation(ctx context.Context, store OpStore, did string, op Operatio
 	// Verify signature
 	keyIdx, err := VerifySignatureAny(op, allowedKeys)
 	if err != nil {
-		return nil, true, err
+		return nil, fmt.Errorf("%w: %v", ErrInvalidOperation, err)
 	}
 
 	// Create the prepared operation
@@ -104,31 +114,31 @@ func VerifyOperation(ctx context.Context, store OpStore, did string, op Operatio
 	// Genesis operations don't have nullifications or timestamp constraints
 	if head == "" {
 		prepOp.NullifiedOps = nil
-		return &prepOp, false, nil // success
+		return &prepOp, nil
 	}
 
 	if prevStatus.Nullified {
-		return nil, true, fmt.Errorf("prev CID is nullified")
+		return nil, fmt.Errorf("%w: prev CID is nullified", ErrInvalidOperation)
 	}
 
 	if prevStatus.LastChild == "" {
 		// Regular update (not a nullification)
 		// Validate timestamp order
 		if createdAt.Sub(prevStatus.CreatedAt) <= 0 {
-			return nil, true, fmt.Errorf("invalid operation timestamp order")
+			return nil, fmt.Errorf("%w: invalid operation timestamp order", ErrInvalidOperation)
 		}
 		prepOp.NullifiedOps = nil
 	} else {
 		// This is a nullification - validate timestamp against head
 		headStatus, err := store.GetEntry(ctx, did, head)
 		if err != nil {
-			return nil, false, err
+			return nil, err
 		}
 		if headStatus == nil { // should be unreachable, implies invalid db state
-			return nil, false, fmt.Errorf("failed to retrieve head")
+			return nil, fmt.Errorf("failed to retrieve head")
 		}
 		if createdAt.Sub(headStatus.CreatedAt) <= 0 {
-			return nil, true, fmt.Errorf("invalid operation timestamp order")
+			return nil, fmt.Errorf("%w: invalid operation timestamp order", ErrInvalidOperation)
 		}
 
 		// Validate 72h constraint and build nullification list
@@ -138,18 +148,18 @@ func VerifyOperation(ctx context.Context, store OpStore, did string, op Operatio
 		for currentCid != "" {
 			status, err := store.GetEntry(ctx, did, currentCid)
 			if err != nil {
-				return nil, false, err
+				return nil, err
 			}
 			if status == nil { // should be unreachable, implies invalid db state
-				return nil, false, fmt.Errorf("failed to walk nullification chain")
+				return nil, fmt.Errorf("failed to walk nullification chain")
 			}
 
 			// Check 72h constraint
 			// (this check is only relevant on the first iteration, since each
 			// subsequent iteration should be even more recent)
 			if createdAt.Sub(status.CreatedAt) > 72*time.Hour {
-				return nil, true, fmt.Errorf("cannot nullify op after 72h (%s - %s = %s)",
-					createdAt, status.CreatedAt, createdAt.Sub(status.CreatedAt))
+				return nil, fmt.Errorf("%w: cannot nullify op after 72h (%s - %s = %s)",
+					ErrInvalidOperation, createdAt, status.CreatedAt, createdAt.Sub(status.CreatedAt))
 			}
 
 			nullifiedOps = append(nullifiedOps, currentCid)
@@ -159,7 +169,7 @@ func VerifyOperation(ctx context.Context, store OpStore, did string, op Operatio
 		prepOp.NullifiedOps = nullifiedOps
 	}
 
-	return &prepOp, false, nil // success
+	return &prepOp, nil
 }
 
 // getValidationContext retrieves the initial information required to validate a signature for a particular operation.
@@ -167,38 +177,37 @@ func VerifyOperation(ctx context.Context, store OpStore, did string, op Operatio
 // For genesis ops (i.e. prev==nil), pass cidStr=="".
 //
 // Returns the current "head" CID of the passed DID and the OpStatus for the previous operation.
-// Any subsequent calls to CommitValidatedOperations must pass the corresponding head, OpStatus values.
-func getValidationContext(ctx context.Context, store OpStore, did string, cidStr string) (string, *OpEntry, bool, error) {
+func getValidationContext(ctx context.Context, store OpStore, did string, cidStr string) (string, *OpEntry, error) {
 	head, err := store.GetLatest(ctx, did)
 	if err != nil {
-		return "", nil, false, err
+		return "", nil, err
 	}
 
 	if head == nil {
 		if cidStr != "" {
-			return "", nil, true, fmt.Errorf("DID not found")
+			return "", nil, fmt.Errorf("%w: DID not found", ErrInvalidOperation)
 		}
-		return "", nil, false, nil // Not an error condition! just means DID is not created yet
+		return "", nil, nil // Not an error condition! just means DID is not created yet
 	}
 
 	if cidStr == "" {
-		return "", nil, true, fmt.Errorf("expected genesis op but DID already exists")
+		return "", nil, fmt.Errorf("%w: expected genesis op but DID already exists", ErrInvalidOperation)
 	}
 
 	if head.OpCid == cidStr {
 		// shortcut: prev == head
-		return head.OpCid, head, false, nil
+		return head.OpCid, head, nil
 	}
 
 	status, err := store.GetEntry(ctx, did, cidStr)
 	if err != nil {
-		return "", nil, false, err
+		return "", nil, err
 	}
 	if status == nil {
-		return "", nil, true, fmt.Errorf("prev cid does not exist %s", cidStr)
+		return "", nil, fmt.Errorf("%w: prev cid does not exist %s", ErrInvalidOperation, cidStr)
 	}
 
-	return head.OpCid, status, false, nil
+	return head.OpCid, status, nil
 }
 
 // MemOpStore is an in-memory implementation of the OpStore interface
@@ -265,7 +274,7 @@ func (store *MemOpStore) CommitOperations(ctx context.Context, ops []*PreparedOp
 	for _, prepOp := range ops {
 		currentHead := store.head[prepOp.DID]
 		if currentHead != prepOp.PrevHead {
-			return fmt.Errorf("head CID mismatch for DID %s", prepOp.DID)
+			return fmt.Errorf("%w: head CID mismatch for DID %s", ErrHeadMismatch, prepOp.DID)
 		}
 	}
 
