@@ -61,10 +61,23 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 
 // handleHealth handles GET /_health - returns version information
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
+	s.writeJSON(w, "application/json", map[string]string{
 		"version": versioninfo.Short(),
 	})
+}
+
+// writeJSON marshals v to JSON and writes it to w with the given content type.
+// If marshaling fails, it sends a 500 error. If writing fails, it logs the error.
+func (s *Server) writeJSON(w http.ResponseWriter, contentType string, v any) {
+	data, err := json.Marshal(v)
+	if err != nil {
+		writeJSONError(w, fmt.Sprintf("error encoding response: %v", err), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", contentType)
+	if _, err := w.Write(data); err != nil {
+		s.logger.Error("failed to write response", "err", err)
+	}
 }
 
 // writeJSONError writes a JSON error response
@@ -96,11 +109,7 @@ func (s *Server) handleDIDDoc(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/did+json")
-	if err := json.NewEncoder(w).Encode(doc); err != nil {
-		writeJSONError(w, fmt.Sprintf("error encoding response: %v", err), http.StatusInternalServerError)
-		return
-	}
+	s.writeJSON(w, "application/did+json", doc)
 }
 
 // handleDIDData handles GET /{did}/data - returns the latest operation data
@@ -143,11 +152,7 @@ func (s *Server) handleDIDData(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		writeJSONError(w, fmt.Sprintf("error encoding response: %v", err), http.StatusInternalServerError)
-		return
-	}
+	s.writeJSON(w, "application/json", resp)
 }
 
 // handleDIDLogAudit handles GET /{did}/log/audit - returns the full audit log with metadata
@@ -177,11 +182,7 @@ func (s *Server) handleDIDLogAudit(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(entries); err != nil {
-		writeJSONError(w, fmt.Sprintf("error encoding response: %v", err), http.StatusInternalServerError)
-		return
-	}
+	s.writeJSON(w, "application/json", entries)
 }
 
 // handleDIDLog handles GET /{did}/log - returns the full operation log
@@ -208,11 +209,7 @@ func (s *Server) handleDIDLog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(operations); err != nil {
-		writeJSONError(w, fmt.Sprintf("error encoding response: %v", err), http.StatusInternalServerError)
-		return
-	}
+	s.writeJSON(w, "application/json", operations)
 }
 
 // handleDIDLogLast handles GET /{did}/log/last - returns the raw last operation
@@ -231,9 +228,5 @@ func (s *Server) handleDIDLogLast(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(head.Op.AsOpEnum()); err != nil {
-		writeJSONError(w, fmt.Sprintf("error encoding response: %v", err), http.StatusInternalServerError)
-		return
-	}
+	s.writeJSON(w, "application/json", head.Op.AsOpEnum())
 }
