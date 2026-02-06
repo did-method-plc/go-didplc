@@ -11,6 +11,7 @@ help: ## Print info about all commands
 .PHONY: build
 build: ## Build all executables
 	go build ./cmd/plcli
+	go build -o plc-replica ./cmd/replica
 
 .PHONY: all
 all: build
