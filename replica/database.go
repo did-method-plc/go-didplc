@@ -17,14 +17,22 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-// opEnumDB wraps didplc.OpEnum to provide SQL Scanner/Valuer for GORM storage.
-type opEnumDB didplc.OpEnum
+// storedOp wraps didplc.OpEnum for SQL storage
+type storedOp didplc.OpEnum
 
-func (o opEnumDB) Value() (driver.Value, error) {
+func newStoredOp(op didplc.Operation) storedOp {
+	return storedOp(*op.AsOpEnum())
+}
+
+func (o *storedOp) Operation() didplc.Operation {
+	return (*didplc.OpEnum)(o).AsOperation()
+}
+
+func (o storedOp) Value() (driver.Value, error) {
 	return json.Marshal((*didplc.OpEnum)(&o))
 }
 
-func (o *opEnumDB) Scan(value interface{}) error {
+func (o *storedOp) Scan(value any) error {
 	var bytes []byte
 	switch v := value.(type) {
 	case string:
@@ -32,7 +40,7 @@ func (o *opEnumDB) Scan(value interface{}) error {
 	case []byte:
 		bytes = v
 	default:
-		return fmt.Errorf("unsupported type for opEnumDB: %T", value)
+		return fmt.Errorf("unsupported type for storedOp: %T", value)
 	}
 	return json.Unmarshal(bytes, (*didplc.OpEnum)(o))
 }
@@ -45,13 +53,13 @@ type Head struct {
 
 // OperationRecord represents a stored operation with its status in the database
 type OperationRecord struct {
-	DID              string    `gorm:"column:did;primaryKey;index:idx_operations_did_created_at,priority:1"`
-	CID              string    `gorm:"column:cid;primaryKey"`
-	CreatedAt        time.Time `gorm:"column:created_at;not null;index:idx_operations_did_created_at,priority:2"`
-	Nullified        bool      `gorm:"column:nullified;not null;default:0"`
-	LastChild        string    `gorm:"column:last_child"`
-	AllowedKeysCount int       `gorm:"column:allowed_keys_count;not null"`
-	OpData           opEnumDB  `gorm:"column:op_data;not null"`
+	DID              string      `gorm:"column:did;primaryKey;index:idx_operations_did_created_at,priority:1"`
+	CID              string      `gorm:"column:cid;primaryKey"`
+	CreatedAt        time.Time   `gorm:"column:created_at;not null;index:idx_operations_did_created_at,priority:2"`
+	Nullified        bool        `gorm:"column:nullified;not null;default:0"`
+	LastChild        string      `gorm:"column:last_child"`
+	AllowedKeysCount int         `gorm:"column:allowed_keys_count;not null"`
+	OpData           storedOp `gorm:"column:op_data;not null"`
 }
 
 // Note: couldn't call the type Operation because that'd get confusing with didplc.Operation
@@ -63,6 +71,21 @@ func (OperationRecord) TableName() string {
 type HostCursor struct {
 	Host string `gorm:"primaryKey"`
 	Seq  int64  `gorm:"not null"`
+}
+
+func opRecToEntry(opRec *OperationRecord, cid string) *didplc.OpEntry {
+	op := opRec.OpData.Operation()
+	rotationKeys := op.EquivalentRotationKeys()
+	allowedKeys := rotationKeys[:opRec.AllowedKeysCount]
+	return &didplc.OpEntry{
+		DID:         opRec.DID,
+		CreatedAt:   opRec.CreatedAt,
+		Nullified:   opRec.Nullified,
+		LastChild:   opRec.LastChild,
+		AllowedKeys: allowedKeys,
+		Op:          op,
+		OpCid:       cid,
+	}
 }
 
 // GormOpStore implements didplc.OpStore using a database backend
@@ -147,24 +170,7 @@ func (db *GormOpStore) GetLatest(ctx context.Context, did string) (*didplc.OpEnt
 		return nil, fmt.Errorf("database error: %w", result.Error)
 	}
 
-	opData := didplc.OpEnum(opRec.OpData)
-	operation := opData.AsOperation()
-	if operation == nil {
-		return nil, fmt.Errorf("invalid operation type")
-	}
-
-	rotationKeys := operation.EquivalentRotationKeys()
-	allowedKeys := rotationKeys[:opRec.AllowedKeysCount]
-
-	return &didplc.OpEntry{
-		DID:         opRec.DID,
-		CreatedAt:   opRec.CreatedAt,
-		Nullified:   opRec.Nullified,
-		LastChild:   opRec.LastChild,
-		AllowedKeys: allowedKeys,
-		Op:          operation,
-		OpCid:       opRec.CID,
-	}, nil
+	return opRecToEntry(&opRec, opRec.CID), nil
 }
 
 // GetEntry implements didplc.OpStore
@@ -178,26 +184,7 @@ func (db *GormOpStore) GetEntry(ctx context.Context, did string, cid string) (*d
 		return nil, fmt.Errorf("database error: %w", result.Error)
 	}
 
-	// Get rotation keys from the operation
-	opData := didplc.OpEnum(opRec.OpData)
-	operation := opData.AsOperation()
-	if operation == nil {
-		return nil, fmt.Errorf("invalid operation type")
-	}
-
-	// Get rotation keys and slice to allowed count
-	rotationKeys := operation.EquivalentRotationKeys()
-	allowedKeys := rotationKeys[:opRec.AllowedKeysCount]
-
-	return &didplc.OpEntry{
-		DID:         opRec.DID,
-		CreatedAt:   opRec.CreatedAt,
-		Nullified:   opRec.Nullified,
-		LastChild:   opRec.LastChild,
-		AllowedKeys: allowedKeys,
-		Op:          operation,
-		OpCid:       cid,
-	}, nil
+	return opRecToEntry(&opRec, cid), nil
 }
 
 // GetAllEntries implements didplc.OpStore
@@ -210,23 +197,7 @@ func (db *GormOpStore) GetAllEntries(ctx context.Context, did string) ([]*didplc
 
 	entries := make([]*didplc.OpEntry, 0, len(opRecs))
 	for _, opRec := range opRecs {
-		opData := didplc.OpEnum(opRec.OpData)
-		operation := opData.AsOperation()
-		if operation == nil {
-			return nil, fmt.Errorf("invalid operation type")
-		}
-		rotationKeys := operation.EquivalentRotationKeys()
-		allowedKeys := rotationKeys[:opRec.AllowedKeysCount]
-
-		entries = append(entries, &didplc.OpEntry{
-			DID:         opRec.DID,
-			CreatedAt:   opRec.CreatedAt,
-			Nullified:   opRec.Nullified,
-			LastChild:   opRec.LastChild,
-			AllowedKeys: allowedKeys,
-			Op:          operation,
-			OpCid:       opRec.CID,
-		})
+		entries = append(entries, opRecToEntry(&opRec, opRec.CID))
 	}
 
 	return entries, nil
@@ -237,7 +208,7 @@ func (db *GormOpStore) CommitOperations(ctx context.Context, ops []*didplc.Prepa
 	// Begin transaction
 	return db.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for _, prepOp := range ops {
-			opData := opEnumDB(*prepOp.Op.AsOpEnum())
+			opData := newStoredOp(prepOp.Op)
 
 			if prepOp.PrevHead == "" {
 				// Genesis operation
