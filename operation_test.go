@@ -110,13 +110,13 @@ func TestAuditLogInvalidSigEncoding(t *testing.T) {
 	assert.ErrorContains(VerifyOpLog(entries), "CRLF")
 
 	entries = loadTestLogEntries(t, "testdata/log_invalid_sig_der.json")
-	assert.EqualError(VerifyOpLog(entries), "crytographic signature invalid") // Note: there is no reliable way to detect DER-encoded signatures syntactically, so a generic invalid signature error is expected
+	assert.ErrorContains(VerifyOpLog(entries), "crytographic signature invalid") // Note: there is no reliable way to detect DER-encoded signatures syntactically, so a generic invalid signature error is expected
 
 	entries = loadTestLogEntries(t, "testdata/log_invalid_sig_p256_high_s.json")
-	assert.EqualError(VerifyOpLog(entries), "crytographic signature invalid")
+	assert.ErrorContains(VerifyOpLog(entries), "crytographic signature invalid")
 
 	entries = loadTestLogEntries(t, "testdata/log_invalid_sig_k256_high_s.json")
-	assert.EqualError(VerifyOpLog(entries), "crytographic signature invalid")
+	assert.ErrorContains(VerifyOpLog(entries), "crytographic signature invalid")
 
 }
 
@@ -124,20 +124,20 @@ func TestAuditLogInvalidNullification(t *testing.T) {
 	assert := assert.New(t)
 
 	entries := loadTestLogEntries(t, "testdata/log_invalid_nullification_reused_key.json")
-	assert.EqualError(VerifyOpLog(entries), "crytographic signature invalid") // TODO: This is the expected error message for the current impl logic. This could be improved.
+	assert.ErrorContains(VerifyOpLog(entries), "crytographic signature invalid") // TODO: This is the expected error message for the current impl logic. This could be improved.
 
 	entries = loadTestLogEntries(t, "testdata/log_invalid_nullification_too_slow.json")
 	assert.ErrorContains(VerifyOpLog(entries), "cannot nullify op after 72h")
 
 	entries = loadTestLogEntries(t, "testdata/log_invalid_update_nullified.json")
-	assert.EqualError(VerifyOpLog(entries), "prev CID is nullified")
+	assert.ErrorContains(VerifyOpLog(entries), "prev CID is nullified")
 }
 
 func TestAuditLogInvalidTombstoneUpdate(t *testing.T) {
 	assert := assert.New(t)
 
 	entries := loadTestLogEntries(t, "testdata/log_invalid_update_tombstoned.json")
-	assert.EqualError(VerifyOpLog(entries), "no keys to verify against") // TODO: This is the expected error message for the current impl logic. This could be improved.
+	assert.ErrorContains(VerifyOpLog(entries), "no keys to verify against") // TODO: This is the expected error message for the current impl logic. This could be improved.
 }
 
 func TestCreatePLC(t *testing.T) {

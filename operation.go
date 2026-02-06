@@ -40,6 +40,8 @@ type Operation interface {
 	EquivalentRotationKeys() []string
 	// CID of the previous operation ("" for genesis ops)
 	PrevCIDStr() string
+	// converts this operation to an OpEnum
+	AsOpEnum() *OpEnum
 }
 
 type OpService struct {
@@ -267,6 +269,10 @@ func (op *RegularOp) PrevCIDStr() string {
 	return *op.Prev
 }
 
+func (op *RegularOp) AsOpEnum() *OpEnum {
+	return &OpEnum{Regular: op}
+}
+
 func (op *LegacyOp) CID() cid.Cid {
 	return computeCID(op.SignedCBORBytes())
 }
@@ -385,6 +391,10 @@ func (op *LegacyOp) PrevCIDStr() string {
 	return *op.Prev
 }
 
+func (op *LegacyOp) AsOpEnum() *OpEnum {
+	return &OpEnum{Legacy: op}
+}
+
 func (op *TombstoneOp) CID() cid.Cid {
 	return computeCID(op.SignedCBORBytes())
 }
@@ -445,6 +455,10 @@ func (op *TombstoneOp) EquivalentRotationKeys() []string {
 
 func (op *TombstoneOp) PrevCIDStr() string {
 	return op.Prev
+}
+
+func (op *TombstoneOp) AsOpEnum() *OpEnum {
+	return &OpEnum{Tombstone: op}
 }
 
 func (o *OpEnum) MarshalJSON() ([]byte, error) {
@@ -528,3 +542,4 @@ func (oe *OpEnum) AsOperation() Operation {
 		return nil
 	}
 }
+
