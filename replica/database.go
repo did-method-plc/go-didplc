@@ -308,48 +308,6 @@ func (db *GormOpStore) CommitOperations(ctx context.Context, ops []*didplc.Prepa
 	})
 }
 
-// Not part of the OpStore interface, used to implement the GET /did/log endpoint
-func (db *GormOpStore) GetOperationLog(ctx context.Context, did string) ([]*didplc.OpEnum, error) {
-	var opRecs []OperationRecord
-
-	result := db.db.WithContext(ctx).Where("did = ?", did).Where("nullified = ?", false).Order("created_at ASC").Find(&opRecs)
-	if result.Error != nil {
-		return nil, fmt.Errorf("database error: %w", result.Error)
-	}
-
-	operations := make([]*didplc.OpEnum, 0, len(opRecs))
-	for _, opRec := range opRecs {
-		opData := didplc.OpEnum(opRec.OpData)
-		operations = append(operations, &opData)
-	}
-
-	return operations, nil
-}
-
-// Not part of the OpStore interface, used to implement the GET /did/log/audit endpoint
-func (db *GormOpStore) GetOperationLogAudit(ctx context.Context, did string) ([]*didplc.LogEntry, error) {
-	var opRecs []OperationRecord
-
-	result := db.db.WithContext(ctx).Where("did = ?", did).Order("created_at ASC").Find(&opRecs)
-	if result.Error != nil {
-		return nil, fmt.Errorf("database error: %w", result.Error)
-	}
-
-	entries := make([]*didplc.LogEntry, 0, len(opRecs))
-	for _, opRec := range opRecs {
-		entry := &didplc.LogEntry{
-			DID:       opRec.DID,
-			Operation: didplc.OpEnum(opRec.OpData),
-			CID:       opRec.CID,
-			Nullified: opRec.Nullified,
-			CreatedAt: opRec.CreatedAt.UTC().Format("2006-01-02T15:04:05.000Z"),
-		}
-		entries = append(entries, entry)
-	}
-
-	return entries, nil
-}
-
 func (db *GormOpStore) PutCursor(ctx context.Context, host string, seq int64) error {
 	// upsert
 	result := db.db.WithContext(ctx).Clauses(clause.OnConflict{

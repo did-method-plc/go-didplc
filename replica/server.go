@@ -81,7 +81,7 @@ func (s *Server) handleDIDDoc(w http.ResponseWriter, r *http.Request) {
 
 	head, err := s.store.GetLatest(ctx, did)
 	if err != nil {
-		writeJSONError(w, fmt.Sprintf("error fetching head: %v", err), http.StatusInternalServerError)
+		writeJSONError(w, fmt.Sprintf("error fetching from store: %v", err), http.StatusInternalServerError)
 		return
 	}
 	if head == nil {
@@ -110,7 +110,7 @@ func (s *Server) handleDIDData(w http.ResponseWriter, r *http.Request) {
 
 	head, err := s.store.GetLatest(ctx, did)
 	if err != nil {
-		writeJSONError(w, fmt.Sprintf("error fetching head: %v", err), http.StatusInternalServerError)
+		writeJSONError(w, fmt.Sprintf("error fetching from store: %v", err), http.StatusInternalServerError)
 		return
 	}
 	if head == nil {
@@ -155,16 +155,26 @@ func (s *Server) handleDIDLogAudit(w http.ResponseWriter, r *http.Request) {
 	did := r.PathValue("did")
 	ctx := r.Context()
 
-	// Get the audit log (including nullified operations and metadata)
-	entries, err := s.store.GetOperationLogAudit(ctx, did)
+	allEntries, err := s.store.GetAllEntries(ctx, did)
 	if err != nil {
 		writeJSONError(w, fmt.Sprintf("error fetching audit log: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	if len(entries) == 0 {
+	if len(allEntries) == 0 {
 		writeJSONError(w, fmt.Sprintf("DID not registered: %s", did), http.StatusNotFound)
 		return
+	}
+
+	entries := make([]*didplc.LogEntry, 0, len(allEntries))
+	for _, entry := range allEntries {
+		entries = append(entries, &didplc.LogEntry{
+			DID:       entry.DID,
+			Operation: *entry.Op.AsOpEnum(),
+			CID:       entry.OpCid,
+			Nullified: entry.Nullified,
+			CreatedAt: entry.CreatedAt.UTC().Format("2006-01-02T15:04:05.000Z"),
+		})
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -179,11 +189,18 @@ func (s *Server) handleDIDLog(w http.ResponseWriter, r *http.Request) {
 	did := r.PathValue("did")
 	ctx := r.Context()
 
-	// Get the operation log (excluding nullified operations)
-	operations, err := s.store.GetOperationLog(ctx, did)
+	allEntries, err := s.store.GetAllEntries(ctx, did)
 	if err != nil {
 		writeJSONError(w, fmt.Sprintf("error fetching operation log: %v", err), http.StatusInternalServerError)
 		return
+	}
+
+	// Filter out nullified operations
+	operations := make([]*didplc.OpEnum, 0, len(allEntries))
+	for _, entry := range allEntries {
+		if !entry.Nullified {
+			operations = append(operations, entry.Op.AsOpEnum())
+		}
 	}
 
 	if len(operations) == 0 {
@@ -206,7 +223,7 @@ func (s *Server) handleDIDLogLast(w http.ResponseWriter, r *http.Request) {
 	// Get the head CID for this DID
 	head, err := s.store.GetLatest(ctx, did)
 	if err != nil {
-		writeJSONError(w, fmt.Sprintf("error fetching head: %v", err), http.StatusInternalServerError)
+		writeJSONError(w, fmt.Sprintf("error fetching from store: %v", err), http.StatusInternalServerError)
 		return
 	}
 	if head == nil {
