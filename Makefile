@@ -11,13 +11,14 @@ help: ## Print info about all commands
 .PHONY: build
 build: ## Build all executables
 	go build ./cmd/plcli
+	go build -o plc-replica ./cmd/replica
 
 .PHONY: all
 all: build
 
 .PHONY: test
 test: ## Run tests
-	go test -short ./...
+	go test -v -short ./...
 
 .PHONY: coverage-html
 coverage-html: ## Generate test coverage report and open in browser
