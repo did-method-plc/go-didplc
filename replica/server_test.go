@@ -122,7 +122,7 @@ func TestHandleDIDData_Tombstone(t *testing.T) {
 
 	tombstone := &didplc.TombstoneOp{Type: "plc_tombstone", Prev: genesisCID}
 	require.NoError(t, tombstone.Sign(priv))
-	prepOp, _, err := didplc.VerifyOperation(ctx, store, did, tombstone, t0.Add(time.Hour))
+	prepOp, err := didplc.VerifyOperation(ctx, store, did, tombstone, t0.Add(time.Hour))
 	require.NoError(t, err)
 	require.NoError(t, store.CommitOperations(ctx, []*didplc.PreparedOperation{prepOp}))
 
@@ -142,7 +142,7 @@ func TestHandleDIDData_AfterUpdate(t *testing.T) {
 	genesisCID := commitGenesis(t, ctx, store, genesis, did, t0)
 
 	update := createUpdate(t, priv, []string{pubKey}, genesisCID)
-	prepOp, _, err := didplc.VerifyOperation(ctx, store, did, update, t0.Add(time.Hour))
+	prepOp, err := didplc.VerifyOperation(ctx, store, did, update, t0.Add(time.Hour))
 	require.NoError(t, err)
 	require.NoError(t, store.CommitOperations(ctx, []*didplc.PreparedOperation{prepOp}))
 
@@ -167,7 +167,7 @@ func TestHandleDIDLog(t *testing.T) {
 	genesisCID := commitGenesis(t, ctx, store, genesis, did, t0)
 
 	update := createUpdate(t, priv, []string{pubKey}, genesisCID)
-	prepOp, _, err := didplc.VerifyOperation(ctx, store, did, update, t0.Add(time.Hour))
+	prepOp, err := didplc.VerifyOperation(ctx, store, did, update, t0.Add(time.Hour))
 	require.NoError(t, err)
 	require.NoError(t, store.CommitOperations(ctx, []*didplc.PreparedOperation{prepOp}))
 
@@ -206,14 +206,14 @@ func TestHandleDIDLog_ExcludesNullified(t *testing.T) {
 	// Regular update signed by key at index 1
 	update := createUpdate(t, priv, rotationKeys, genesisCID)
 	t1 := t0.Add(time.Hour)
-	prepOp1, _, err := didplc.VerifyOperation(ctx, store, did, update, t1)
+	prepOp1, err := didplc.VerifyOperation(ctx, store, did, update, t1)
 	require.NoError(t, err)
 	require.NoError(t, store.CommitOperations(ctx, []*didplc.PreparedOperation{prepOp1}))
 
 	// Nullification signed by recovery key (prev = genesis, not update)
 	nullify := createUpdate(t, privRecovery, rotationKeys, genesisCID)
 	t2 := t1.Add(time.Hour)
-	prepOp2, _, err := didplc.VerifyOperation(ctx, store, did, nullify, t2)
+	prepOp2, err := didplc.VerifyOperation(ctx, store, did, nullify, t2)
 	require.NoError(t, err)
 	require.NoError(t, store.CommitOperations(ctx, []*didplc.PreparedOperation{prepOp2}))
 
@@ -242,14 +242,14 @@ func TestHandleDIDLogAudit(t *testing.T) {
 	// Regular update signed by key at index 1
 	update := createUpdate(t, priv, rotationKeys, genesisCID)
 	t1 := t0.Add(time.Hour)
-	prepOp1, _, err := didplc.VerifyOperation(ctx, store, did, update, t1)
+	prepOp1, err := didplc.VerifyOperation(ctx, store, did, update, t1)
 	require.NoError(t, err)
 	require.NoError(t, store.CommitOperations(ctx, []*didplc.PreparedOperation{prepOp1}))
 
 	// Nullification signed by recovery key
 	nullify := createUpdate(t, privRecovery, rotationKeys, genesisCID)
 	t2 := t1.Add(time.Hour)
-	prepOp2, _, err := didplc.VerifyOperation(ctx, store, did, nullify, t2)
+	prepOp2, err := didplc.VerifyOperation(ctx, store, did, nullify, t2)
 	require.NoError(t, err)
 	require.NoError(t, store.CommitOperations(ctx, []*didplc.PreparedOperation{prepOp2}))
 
@@ -291,7 +291,7 @@ func TestHandleDIDLogLast(t *testing.T) {
 	genesisCID := commitGenesis(t, ctx, store, genesis, did, t0)
 
 	update := createUpdate(t, priv, []string{pubKey}, genesisCID)
-	prepOp, _, err := didplc.VerifyOperation(ctx, store, did, update, t0.Add(time.Hour))
+	prepOp, err := didplc.VerifyOperation(ctx, store, did, update, t0.Add(time.Hour))
 	require.NoError(t, err)
 	require.NoError(t, store.CommitOperations(ctx, []*didplc.PreparedOperation{prepOp}))
 

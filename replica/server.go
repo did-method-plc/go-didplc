@@ -214,15 +214,8 @@ func (s *Server) handleDIDLogLast(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Wrap the operation in OpEnum for proper JSON marshaling
-	opEnum, err := didplc.WrapOperation(head.Op)
-	if err != nil {
-		writeJSONError(w, fmt.Sprintf("error wrapping operation: %v", err), http.StatusInternalServerError)
-		return
-	}
-
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(opEnum); err != nil {
+	if err := json.NewEncoder(w).Encode(head.Op.AsOpEnum()); err != nil {
 		writeJSONError(w, fmt.Sprintf("error encoding response: %v", err), http.StatusInternalServerError)
 		return
 	}

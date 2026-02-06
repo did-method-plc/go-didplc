@@ -2,6 +2,8 @@ package replica
 
 import (
 	"context"
+	"database/sql/driver"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/url"
@@ -15,6 +17,26 @@ import (
 	"gorm.io/gorm/clause"
 )
 
+// opEnumDB wraps didplc.OpEnum to provide SQL Scanner/Valuer for GORM storage.
+type opEnumDB didplc.OpEnum
+
+func (o opEnumDB) Value() (driver.Value, error) {
+	return json.Marshal((*didplc.OpEnum)(&o))
+}
+
+func (o *opEnumDB) Scan(value interface{}) error {
+	var bytes []byte
+	switch v := value.(type) {
+	case string:
+		bytes = []byte(v)
+	case []byte:
+		bytes = v
+	default:
+		return fmt.Errorf("unsupported type for opEnumDB: %T", value)
+	}
+	return json.Unmarshal(bytes, (*didplc.OpEnum)(o))
+}
+
 // Head represents the current head CID for a DID
 type Head struct {
 	DID string `gorm:"column:did;primaryKey"`
@@ -23,13 +45,13 @@ type Head struct {
 
 // OperationRecord represents a stored operation with its status in the database
 type OperationRecord struct {
-	DID              string        `gorm:"column:did;primaryKey;index:idx_operations_did_created_at,priority:1"`
-	CID              string        `gorm:"column:cid;primaryKey"`
-	CreatedAt        time.Time     `gorm:"column:created_at;not null;index:idx_operations_did_created_at,priority:2"`
-	Nullified        bool          `gorm:"column:nullified;not null;default:0"`
-	LastChild        string        `gorm:"column:last_child"`
-	AllowedKeysCount int           `gorm:"column:allowed_keys_count;not null"`
-	OpData           didplc.OpEnum `gorm:"column:op_data;not null"`
+	DID              string    `gorm:"column:did;primaryKey;index:idx_operations_did_created_at,priority:1"`
+	CID              string    `gorm:"column:cid;primaryKey"`
+	CreatedAt        time.Time `gorm:"column:created_at;not null;index:idx_operations_did_created_at,priority:2"`
+	Nullified        bool      `gorm:"column:nullified;not null;default:0"`
+	LastChild        string    `gorm:"column:last_child"`
+	AllowedKeysCount int       `gorm:"column:allowed_keys_count;not null"`
+	OpData           opEnumDB  `gorm:"column:op_data;not null"`
 }
 
 // Note: couldn't call the type Operation because that'd get confusing with didplc.Operation
@@ -125,7 +147,8 @@ func (db *GormOpStore) GetLatest(ctx context.Context, did string) (*didplc.OpEnt
 		return nil, fmt.Errorf("database error: %w", result.Error)
 	}
 
-	operation := opRec.OpData.AsOperation()
+	opData := didplc.OpEnum(opRec.OpData)
+	operation := opData.AsOperation()
 	if operation == nil {
 		return nil, fmt.Errorf("invalid operation type")
 	}
@@ -156,7 +179,8 @@ func (db *GormOpStore) GetEntry(ctx context.Context, did string, cid string) (*d
 	}
 
 	// Get rotation keys from the operation
-	operation := opRec.OpData.AsOperation()
+	opData := didplc.OpEnum(opRec.OpData)
+	operation := opData.AsOperation()
 	if operation == nil {
 		return nil, fmt.Errorf("invalid operation type")
 	}
@@ -176,16 +200,44 @@ func (db *GormOpStore) GetEntry(ctx context.Context, did string, cid string) (*d
 	}, nil
 }
 
+// GetAllEntries implements didplc.OpStore
+func (db *GormOpStore) GetAllEntries(ctx context.Context, did string) ([]*didplc.OpEntry, error) {
+	var opRecs []OperationRecord
+	result := db.db.WithContext(ctx).Where("did = ?", did).Order("created_at ASC").Find(&opRecs)
+	if result.Error != nil {
+		return nil, fmt.Errorf("database error: %w", result.Error)
+	}
+
+	entries := make([]*didplc.OpEntry, 0, len(opRecs))
+	for _, opRec := range opRecs {
+		opData := didplc.OpEnum(opRec.OpData)
+		operation := opData.AsOperation()
+		if operation == nil {
+			return nil, fmt.Errorf("invalid operation type")
+		}
+		rotationKeys := operation.EquivalentRotationKeys()
+		allowedKeys := rotationKeys[:opRec.AllowedKeysCount]
+
+		entries = append(entries, &didplc.OpEntry{
+			DID:         opRec.DID,
+			CreatedAt:   opRec.CreatedAt,
+			Nullified:   opRec.Nullified,
+			LastChild:   opRec.LastChild,
+			AllowedKeys: allowedKeys,
+			Op:          operation,
+			OpCid:       opRec.CID,
+		})
+	}
+
+	return entries, nil
+}
+
 // CommitOperations implements didplc.OpStore
 func (db *GormOpStore) CommitOperations(ctx context.Context, ops []*didplc.PreparedOperation) error {
 	// Begin transaction
 	return db.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for _, prepOp := range ops {
-			// Wrap the operation
-			opEnum, err := didplc.WrapOperation(prepOp.Op)
-			if err != nil {
-				return fmt.Errorf("failed to wrap operation: %w", err)
-			}
+			opData := opEnumDB(*prepOp.Op.AsOpEnum())
 
 			if prepOp.PrevHead == "" {
 				// Genesis operation
@@ -197,7 +249,7 @@ func (db *GormOpStore) CommitOperations(ctx context.Context, ops []*didplc.Prepa
 					Nullified:        false,
 					LastChild:        "",
 					AllowedKeysCount: len(prepOp.Op.EquivalentRotationKeys()),
-					OpData:           *opEnum,
+					OpData:           opData,
 				}
 				if err := tx.Create(&newOp).Error; err != nil {
 					return fmt.Errorf("failed to create operation: %w", err)
@@ -236,7 +288,7 @@ func (db *GormOpStore) CommitOperations(ctx context.Context, ops []*didplc.Prepa
 					Nullified:        false,
 					LastChild:        "",
 					AllowedKeysCount: len(prepOp.Op.EquivalentRotationKeys()),
-					OpData:           *opEnum,
+					OpData:           opData,
 				}
 				if err := tx.Create(&newOp).Error; err != nil {
 					return fmt.Errorf("failed to create operation: %w", err)
@@ -267,7 +319,8 @@ func (db *GormOpStore) GetOperationLog(ctx context.Context, did string) ([]*didp
 
 	operations := make([]*didplc.OpEnum, 0, len(opRecs))
 	for _, opRec := range opRecs {
-		operations = append(operations, &opRec.OpData)
+		opData := didplc.OpEnum(opRec.OpData)
+		operations = append(operations, &opData)
 	}
 
 	return operations, nil
@@ -286,7 +339,7 @@ func (db *GormOpStore) GetOperationLogAudit(ctx context.Context, did string) ([]
 	for _, opRec := range opRecs {
 		entry := &didplc.LogEntry{
 			DID:       opRec.DID,
-			Operation: opRec.OpData,
+			Operation: didplc.OpEnum(opRec.OpData),
 			CID:       opRec.CID,
 			Nullified: opRec.Nullified,
 			CreatedAt: opRec.CreatedAt.UTC().Format("2006-01-02T15:04:05.000Z"),

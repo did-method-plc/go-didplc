@@ -2,6 +2,7 @@ package replica
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -133,13 +134,12 @@ func CommitWorker(ctx context.Context, validatedOps <-chan ValidatedOp, infl *In
 
 func validateInner(ctx context.Context, seqop *SequencedOp, store didplc.OpStore) (*didplc.PreparedOperation, error) {
 	var prepOp *didplc.PreparedOperation
-	var opIsInvalid bool
 	var err error
 
 	for {
-		prepOp, opIsInvalid, err = didplc.VerifyOperation(ctx, store, seqop.DID, seqop.Operation, seqop.CreatedAt)
+		prepOp, err = didplc.VerifyOperation(ctx, store, seqop.DID, seqop.Operation, seqop.CreatedAt)
 		if err != nil {
-			if opIsInvalid {
+			if errors.Is(err, didplc.ErrInvalidOperation) {
 				// Operation is definitely invalid - don't retry
 				return nil, fmt.Errorf("failed verifying op %s, %s: %w", seqop.DID, seqop.CID, err)
 			}
