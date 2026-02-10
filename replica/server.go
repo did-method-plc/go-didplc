@@ -11,6 +11,21 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
+const indexBanner string = `
+       .__                                         .__  .__
+______ |  |   ____           _______   ____ ______ |  | |__| ____ _____
+\____ \|  | _/ ___\   ______ \_  __ \_/ __ \\____ \|  | |  |/ ___\\__  \
+|  |_> >  |_\  \___  /_____/  |  | \/\  ___/|  |_> >  |_|  \  \___ / __ \_
+|   __/|____/\___  >          |__|    \___  >   __/|____/__|\___  >____  /
+|__|             \/                       \/|__|                \/     \/
+
+
+This is a did:plc read-replica service.
+
+  Source: https://github.com/did-method-plc/go-didplc/tree/main/cmd/replica
+ Version: %s
+`
+
 // DIDDataResponse is the response for GET /{did}/data
 type DIDDataResponse struct {
 	DID                 string                      `json:"did"`
@@ -56,7 +71,7 @@ func (s *Server) Run() error {
 // handleIndex serves the index page
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
-	fmt.Fprint(w, "hello plc replica\n")
+	fmt.Fprintf(w, indexBanner, versioninfo.Short())
 }
 
 // handleHealth handles GET /_health - returns version information
