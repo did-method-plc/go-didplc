@@ -5,41 +5,44 @@ import (
 
 	"github.com/emirpasic/gods/sets/hashset"
 	"github.com/emirpasic/gods/sets/treeset"
+	"github.com/emirpasic/gods/utils"
 )
 
-/*
-
-Constraints:
-
-- AddInFlight is always called in order of ascending seq
-
-*/
-
+// The ingestor validates operations concurrently and commits them in batches.
+//
+// It is important that:
+//
+//   - All operations for a particular DID are processed in upstream-seq order.
+//
+//   - No two operations for the same DID are "in flight" concurrently,
+//     where "in flight" means they're present somewhere in the validation->commit pipeline.
+//
+//   - When the replica process is shut down and restarted, it should resume ingest from a cursor
+//     value that is definitely lower than any as-yet-uncommitted operations, guaranteeing that each operation
+//     is processed at-least-once. This means that after a restart, some operations may be processed for
+//     a second time - this is ok because they will not pass validation the second time, and will be ignored.
+//
+// The InFlight struct is central to enforcing the above constraints.
+//
+// [InFlight.AddInFlight] should be called before inserting an operation into the to-be-validated queue.
+// If [InFlight.AddInFlight] fails (returns false, indicating that there was an already an op in-flight for the same DID),
+// it is expected that the caller will retry until it succeeds (eventually, the work queue will drain).
+//
+// [InFlight.RemoveInFlight] should be called *after* an operation has been processed (whether it was rejected as an invalid operation, or successfully committed to the db)
 type InFlight struct {
-	resumeCursor int64 // all seqs <= this value have already been processed and committed to db
+	resumeCursor int64 // all seqs <= this value have already been processed and committed to db (or rejected as invalid)
 	dids         *hashset.Set
 	seqs         *treeset.Set // treeset means we can find the minimum efficiently
-	removed      *treeset.Set // seqs that have been removed but are ahead of the cursor
+	removed      *treeset.Set // seqs that have been removed but are ahead of the resumeCursor
 	lock         sync.RWMutex
-}
-
-func int64Comparator(a, b interface{}) int {
-	aInt := a.(int64)
-	bInt := b.(int64)
-	if aInt < bInt {
-		return -1
-	} else if aInt > bInt {
-		return 1
-	}
-	return 0
 }
 
 func NewInFlight(resumeCursor int64) *InFlight {
 	return &InFlight{
 		resumeCursor: resumeCursor,
 		dids:         hashset.New(),
-		seqs:         treeset.NewWith(int64Comparator),
-		removed:      treeset.NewWith(int64Comparator),
+		seqs:         treeset.NewWith(utils.Int64Comparator),
+		removed:      treeset.NewWith(utils.Int64Comparator),
 	}
 }
 
