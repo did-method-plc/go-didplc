@@ -29,6 +29,9 @@ import (
 // it is expected that the caller will retry until it succeeds (eventually, the work queue will drain).
 //
 // [InFlight.RemoveInFlight] should be called *after* an operation has been processed (whether it was rejected as an invalid operation, or successfully committed to the db)
+//
+// The implementation assumes that [InFlight.AddInFlight] will always be called with monotonically increasing seq values, and gracefully handles any "gaps" in the sequence.
+// It does *not* assume any particular order to [InFlight.RemoveInFlight] calls.
 type InFlight struct {
 	resumeCursor int64 // all seqs <= this value have already been processed and committed to db (or rejected as invalid)
 	dids         *hashset.Set
