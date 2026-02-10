@@ -53,13 +53,13 @@ type Head struct {
 
 // OperationRecord represents a stored operation with its status in the database
 type OperationRecord struct {
-	DID              string      `gorm:"column:did;primaryKey;index:idx_operations_did_created_at,priority:1"`
-	CID              string      `gorm:"column:cid;primaryKey"`
-	CreatedAt        time.Time   `gorm:"column:created_at;not null;index:idx_operations_did_created_at,priority:2"`
-	Nullified        bool        `gorm:"column:nullified;not null;default:0"`
-	LastChild        string      `gorm:"column:last_child"`
-	AllowedKeysCount int         `gorm:"column:allowed_keys_count;not null"`
-	OpData           storedOp `gorm:"column:op_data;not null"`
+	DID              string    `gorm:"column:did;primaryKey;index:idx_operations_did_created_at,priority:1"`
+	CID              string    `gorm:"column:cid;primaryKey"`
+	CreatedAt        time.Time `gorm:"column:created_at;not null;index:idx_operations_did_created_at,priority:2"`
+	Nullified        bool      `gorm:"column:nullified;not null;default:0"`
+	LastChild        string    `gorm:"column:last_child"`
+	AllowedKeysCount int       `gorm:"column:allowed_keys_count;not null"`
+	OpData           storedOp  `gorm:"column:op_data;not null"`
 }
 
 // Note: couldn't call the type Operation because that'd get confusing with didplc.Operation
@@ -98,7 +98,6 @@ var _ didplc.OpStore = (*GormOpStore)(nil)
 // NewGormOpStoreWithDialector creates a new database-backed operation store with a custom dialector
 func NewGormOpStoreWithDialector(dialector gorm.Dialector, logger *slog.Logger) (*GormOpStore, error) {
 	db, err := gorm.Open(dialector, &gorm.Config{
-		SkipDefaultTransaction: true,
 		//PrepareStmt:            true, // Doesn't seem to work well with postgres
 		Logger: slogGorm.New(
 			slogGorm.WithHandler(logger.With("component", "opstore").Handler()),
