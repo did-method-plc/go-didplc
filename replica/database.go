@@ -132,14 +132,37 @@ func NewGormOpStoreWithDialector(dialector gorm.Dialector, logger *slog.Logger) 
 	}, nil
 }
 
-func NewGormOpStoreWithSqlite(dbPath string, logger *slog.Logger) (*GormOpStore, error) {
+// NewGormOpStore creates a new database-backed operation store from a URL.
+// The URL scheme determines the database type:
+//   - sqlite://path/to/db
+//   - postgres://user:pass@host/db (or postgresql://)
+func NewGormOpStore(dbURL string, logger *slog.Logger) (*GormOpStore, error) {
+	u, err := url.Parse(dbURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse database URL: %w", err)
+	}
+
+	switch u.Scheme {
+	case "sqlite":
+		dbPath := u.Host + u.Path
+		slog.Info("using database", "type", "sqlite", "path", dbPath)
+		return newGormOpStoreWithSqlite(dbPath, logger)
+	case "postgres", "postgresql":
+		slog.Info("using database", "type", "postgres")
+		return newGormOpStoreWithPostgres(dbURL, logger)
+	default:
+		return nil, fmt.Errorf("unsupported database URL scheme: %q (expected sqlite://, postgres://, or postgresql://)", u.Scheme)
+	}
+}
+
+func newGormOpStoreWithSqlite(dbPath string, logger *slog.Logger) (*GormOpStore, error) {
 	return NewGormOpStoreWithDialector(
 		sqlite.Open(dbPath+"?mode=rwc&cache=shared&_journal_mode=WAL"),
 		logger,
 	)
 }
 
-func NewGormOpStoreWithPostgres(dsn string, logger *slog.Logger) (*GormOpStore, error) {
+func newGormOpStoreWithPostgres(dsn string, logger *slog.Logger) (*GormOpStore, error) {
 	u, err := url.Parse(dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse postgres URL: %w", err)

@@ -20,15 +20,10 @@ func main() {
 		Usage: "PLC directory replica server",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
-				Name:    "postgres-url",
-				Usage:   "PostgreSQL connection string (if set, uses Postgres instead of SQLite)",
-				Sources: cli.EnvVars("POSTGRES_URL"),
-			},
-			&cli.StringFlag{
-				Name:    "sqlite-path",
-				Usage:   "SQLite database file path (used when --postgres-url is not set)",
-				Value:   "replica.db",
-				Sources: cli.EnvVars("SQLITE_PATH"),
+				Name:    "db-url",
+				Usage:   "Database URL (e.g. sqlite://replica.db, postgres://user:pass@host/db)",
+				Value:   "sqlite://replica.db",
+				Sources: cli.EnvVars("DATABASE_URL"),
 			},
 			&cli.StringFlag{
 				Name:    "bind",
@@ -88,8 +83,7 @@ func main() {
 
 func run(ctx context.Context, cmd *cli.Command) error {
 	// Parse configuration
-	postgresURL := cmd.String("postgres-url")
-	sqlitePath := cmd.String("sqlite-path")
+	dbURL := cmd.String("db-url")
 	httpAddr := cmd.String("bind")
 	metricsAddr := cmd.String("metrics-addr")
 	noIngest := cmd.Bool("no-ingest")
@@ -134,20 +128,9 @@ func run(ctx context.Context, cmd *cli.Command) error {
 	}
 	defer otelShutdown(context.Background())
 
-	var store *replica.GormOpStore
-
-	if postgresURL != "" {
-		slog.Info("using database", "type", "postgres", "url", postgresURL)
-		store, err = replica.NewGormOpStoreWithPostgres(postgresURL, logger)
-		if err != nil {
-			return fmt.Errorf("failed to create postgres store: %w", err)
-		}
-	} else {
-		slog.Info("using database", "type", "sqlite", "path", sqlitePath)
-		store, err = replica.NewGormOpStoreWithSqlite(sqlitePath, logger)
-		if err != nil {
-			return fmt.Errorf("failed to create sqlite store: %w", err)
-		}
+	store, err := replica.NewGormOpStore(dbURL, logger)
+	if err != nil {
+		return fmt.Errorf("failed to create store: %w", err)
 	}
 
 	server := replica.NewServer(store, httpAddr, logger)
