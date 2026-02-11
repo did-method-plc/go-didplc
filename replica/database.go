@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql/driver"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/url"
@@ -255,6 +256,9 @@ func (db *GormOpStore) CommitOperations(ctx context.Context, ops []*didplc.Prepa
 					CID: prepOp.OpCid,
 				}
 				if err := tx.Create(&newHead).Error; err != nil {
+					if errors.Is(err, gorm.ErrDuplicatedKey) {
+						return didplc.ErrHeadMismatch
+					}
 					return fmt.Errorf("failed to create head: %w", err)
 				}
 			} else {
@@ -293,7 +297,7 @@ func (db *GormOpStore) CommitOperations(ctx context.Context, ops []*didplc.Prepa
 				if result.Error != nil {
 					return fmt.Errorf("failed to update head: %w", result.Error)
 				} else if result.RowsAffected != 1 {
-					return fmt.Errorf("head CID mismatch")
+					return didplc.ErrHeadMismatch
 				}
 			}
 		}
