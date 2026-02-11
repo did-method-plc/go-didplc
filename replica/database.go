@@ -60,6 +60,7 @@ type OperationRecord struct {
 	LastChild        string    `gorm:"column:last_child"`
 	AllowedKeysCount int       `gorm:"column:allowed_keys_count;not null"`
 	OpData           storedOp  `gorm:"column:op_data;not null"`
+	Seq              *int64    `gorm:"column:seq;index:idx_seq"` // currently unused
 }
 
 // Note: couldn't call the type Operation because that'd get confusing with didplc.Operation
