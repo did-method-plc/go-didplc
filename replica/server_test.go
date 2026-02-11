@@ -129,7 +129,7 @@ func TestHandleDIDData_Tombstone(t *testing.T) {
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, httptest.NewRequest("GET", "/"+did+"/data", nil))
 
-	assert.Equal(t, http.StatusNotFound, w.Code)
+	assert.Equal(t, http.StatusGone, w.Code)
 }
 
 func TestHandleDIDData_AfterUpdate(t *testing.T) {

@@ -133,6 +133,11 @@ func (s *Server) handleDIDDoc(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if _, ok := head.Op.(*didplc.TombstoneOp); ok {
+		s.writeJSONError(w, fmt.Sprintf("DID not available: %s", did), http.StatusGone)
+		return
+	}
+
 	// Generate DID document
 	doc, err := head.Op.Doc(did)
 	if err != nil {
@@ -178,7 +183,7 @@ func (s *Server) handleDIDData(w http.ResponseWriter, r *http.Request) {
 		resp.AlsoKnownAs = regular.AlsoKnownAs
 		resp.Services = regular.Services
 	case *didplc.TombstoneOp:
-		s.writeJSONError(w, fmt.Sprintf("DID not available: %s", did), http.StatusNotFound)
+		s.writeJSONError(w, fmt.Sprintf("DID not available: %s", did), http.StatusGone)
 		return
 	default:
 		s.writeJSONError(w, "unknown operation type", http.StatusInternalServerError)
