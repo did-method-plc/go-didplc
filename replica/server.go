@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/carlmjohnson/versioninfo"
 	"github.com/did-method-plc/go-didplc/didplc"
@@ -81,13 +82,26 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// formatTimestamp formats a time.Time as a JS-style ISO 8601 timestamp.
+func formatTimestamp(t time.Time) string {
+	return t.UTC().Format("2006-01-02T15:04:05.000Z")
+}
+
 // writeJSON marshals v to JSON and writes it to w with the given content type.
 // If marshaling fails, it sends a 500 error. If writing fails, it logs the error.
-func (s *Server) writeJSON(w http.ResponseWriter, contentType string, v any) {
+// Optional extra headers are set before writing the response.
+func (s *Server) writeJSON(w http.ResponseWriter, contentType string, v any, extraHeaders ...http.Header) {
 	data, err := json.Marshal(v)
 	if err != nil {
-		writeJSONError(w, fmt.Sprintf("error encoding response: %v", err), http.StatusInternalServerError)
+		s.writeJSONError(w, fmt.Sprintf("error encoding response: %v", err), http.StatusInternalServerError)
 		return
+	}
+	for _, h := range extraHeaders {
+		for k, vs := range h {
+			for _, val := range vs {
+				w.Header().Set(k, val)
+			}
+		}
 	}
 	w.Header().Set("Content-Type", contentType)
 	if _, err := w.Write(data); err != nil {
@@ -96,10 +110,12 @@ func (s *Server) writeJSON(w http.ResponseWriter, contentType string, v any) {
 }
 
 // writeJSONError writes a JSON error response
-func writeJSONError(w http.ResponseWriter, message string, status int) {
+func (s *Server) writeJSONError(w http.ResponseWriter, message string, status int) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(map[string]string{"message": message})
+	if err := json.NewEncoder(w).Encode(map[string]string{"message": message}); err != nil {
+		s.logger.Error("failed to encode error response", "err", err)
+	}
 }
 
 // handleDIDDoc handles GET /{did} - returns the DID document
@@ -109,22 +125,24 @@ func (s *Server) handleDIDDoc(w http.ResponseWriter, r *http.Request) {
 
 	head, err := s.store.GetLatest(ctx, did)
 	if err != nil {
-		writeJSONError(w, fmt.Sprintf("error fetching from store: %v", err), http.StatusInternalServerError)
+		s.writeJSONError(w, fmt.Sprintf("error fetching from store: %v", err), http.StatusInternalServerError)
 		return
 	}
 	if head == nil {
-		writeJSONError(w, fmt.Sprintf("DID not registered: %s", did), http.StatusNotFound)
+		s.writeJSONError(w, fmt.Sprintf("DID not registered: %s", did), http.StatusNotFound)
 		return
 	}
 
 	// Generate DID document
 	doc, err := head.Op.Doc(did)
 	if err != nil {
-		writeJSONError(w, fmt.Sprintf("error generating DID document: %v", err), http.StatusInternalServerError)
+		s.writeJSONError(w, fmt.Sprintf("error generating DID document: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	s.writeJSON(w, "application/did+json", doc)
+	s.writeJSON(w, "application/did+json", doc, http.Header{
+		"Last-Modified": {formatTimestamp(head.CreatedAt)},
+	})
 }
 
 // handleDIDData handles GET /{did}/data - returns the latest operation data
@@ -134,11 +152,11 @@ func (s *Server) handleDIDData(w http.ResponseWriter, r *http.Request) {
 
 	head, err := s.store.GetLatest(ctx, did)
 	if err != nil {
-		writeJSONError(w, fmt.Sprintf("error fetching from store: %v", err), http.StatusInternalServerError)
+		s.writeJSONError(w, fmt.Sprintf("error fetching from store: %v", err), http.StatusInternalServerError)
 		return
 	}
 	if head == nil {
-		writeJSONError(w, fmt.Sprintf("DID not registered: %s", did), http.StatusNotFound)
+		s.writeJSONError(w, fmt.Sprintf("DID not registered: %s", did), http.StatusNotFound)
 		return
 	}
 
@@ -160,10 +178,10 @@ func (s *Server) handleDIDData(w http.ResponseWriter, r *http.Request) {
 		resp.AlsoKnownAs = regular.AlsoKnownAs
 		resp.Services = regular.Services
 	case *didplc.TombstoneOp:
-		writeJSONError(w, fmt.Sprintf("DID not available: %s", did), http.StatusNotFound)
+		s.writeJSONError(w, fmt.Sprintf("DID not available: %s", did), http.StatusNotFound)
 		return
 	default:
-		writeJSONError(w, "unknown operation type", http.StatusInternalServerError)
+		s.writeJSONError(w, "unknown operation type", http.StatusInternalServerError)
 		return
 	}
 
@@ -177,12 +195,12 @@ func (s *Server) handleDIDLogAudit(w http.ResponseWriter, r *http.Request) {
 
 	allEntries, err := s.store.GetAllEntries(ctx, did)
 	if err != nil {
-		writeJSONError(w, fmt.Sprintf("error fetching audit log: %v", err), http.StatusInternalServerError)
+		s.writeJSONError(w, fmt.Sprintf("error fetching audit log: %v", err), http.StatusInternalServerError)
 		return
 	}
 
 	if len(allEntries) == 0 {
-		writeJSONError(w, fmt.Sprintf("DID not registered: %s", did), http.StatusNotFound)
+		s.writeJSONError(w, fmt.Sprintf("DID not registered: %s", did), http.StatusNotFound)
 		return
 	}
 
@@ -193,7 +211,7 @@ func (s *Server) handleDIDLogAudit(w http.ResponseWriter, r *http.Request) {
 			Operation: *entry.Op.AsOpEnum(),
 			CID:       entry.OpCid,
 			Nullified: entry.Nullified,
-			CreatedAt: entry.CreatedAt.UTC().Format("2006-01-02T15:04:05.000Z"),
+			CreatedAt: formatTimestamp(entry.CreatedAt),
 		})
 	}
 
@@ -207,7 +225,7 @@ func (s *Server) handleDIDLog(w http.ResponseWriter, r *http.Request) {
 
 	allEntries, err := s.store.GetAllEntries(ctx, did)
 	if err != nil {
-		writeJSONError(w, fmt.Sprintf("error fetching operation log: %v", err), http.StatusInternalServerError)
+		s.writeJSONError(w, fmt.Sprintf("error fetching operation log: %v", err), http.StatusInternalServerError)
 		return
 	}
 
@@ -220,7 +238,7 @@ func (s *Server) handleDIDLog(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(operations) == 0 {
-		writeJSONError(w, fmt.Sprintf("DID not registered: %s", did), http.StatusNotFound)
+		s.writeJSONError(w, fmt.Sprintf("DID not registered: %s", did), http.StatusNotFound)
 		return
 	}
 
@@ -235,11 +253,11 @@ func (s *Server) handleDIDLogLast(w http.ResponseWriter, r *http.Request) {
 	// Get the head CID for this DID
 	head, err := s.store.GetLatest(ctx, did)
 	if err != nil {
-		writeJSONError(w, fmt.Sprintf("error fetching from store: %v", err), http.StatusInternalServerError)
+		s.writeJSONError(w, fmt.Sprintf("error fetching from store: %v", err), http.StatusInternalServerError)
 		return
 	}
 	if head == nil {
-		writeJSONError(w, fmt.Sprintf("DID not registered: %s", did), http.StatusNotFound)
+		s.writeJSONError(w, fmt.Sprintf("DID not registered: %s", did), http.StatusNotFound)
 		return
 	}
 
