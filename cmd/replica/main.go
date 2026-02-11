@@ -50,7 +50,7 @@ func main() {
 			},
 			&cli.Int64Flag{
 				Name:    "cursor-override",
-				Usage:   "Starting cursor (sequence number) for ingestion",
+				Usage:   "Initial cursor value used to sync from the upstream host. May be useful when switching the upstream host",
 				Value:   -1,
 				Sources: cli.EnvVars("CURSOR_OVERRIDE"),
 			},

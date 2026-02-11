@@ -6,19 +6,18 @@ It performs full cryptographic validation of all inbound PLC operations, includi
 
 ```
 NAME:
-   replica - PLC directory replica server
+   plc-replica - PLC directory replica server
 
 USAGE:
-   replica [global options]
+   plc-replica [global options]
 
 GLOBAL OPTIONS:
-   --postgres-url string            PostgreSQL connection string (if set, uses Postgres instead of SQLite) [$POSTGRES_URL]
-   --sqlite-path string             SQLite database file path (used when --postgres-url is not set) (default: "replica.db") [$SQLITE_PATH]
-   --http-addr string               HTTP server listen address (default: ":8080") [$HTTP_ADDR]
+   --db-url string                  Database URL (e.g. sqlite://replica.db, postgres://user:pass@host/db) (default: "sqlite://replica.db") [$DATABASE_URL]
+   --bind string                    HTTP server listen address (default: ":8080") [$REPLICA_BIND]
    --metrics-addr string            Metrics HTTP server listen address (default: ":9464") [$METRICS_ADDR]
    --no-ingest                      Disable ingestion from upstream directory (default: false) [$NO_INGEST]
    --upstream-directory-url string  Upstream PLC directory base URL (default: "https://plc.directory") [$UPSTREAM_DIRECTORY_URL]
-   --cursor-override int            Starting cursor (sequence number) for ingestion (default: -1) [$CURSOR_OVERRIDE]
+   --cursor-override int            Initial cursor value used to sync from the upstream host. May be useful when switching the upstream host (default: -1) [$CURSOR_OVERRIDE]
    --num-workers int                Number of validation worker threads (0 = auto) (default: 0) [$NUM_WORKERS]
    --log-level string               Log level (debug, info, warn, error) (default: "info") [$LOG_LEVEL]
    --log-json                       Output logs in JSON format (default: false) [$LOG_JSON]
@@ -54,6 +53,12 @@ Although these differences are spec-compliant, some PLC client libraries may hav
 
 The service supports either PostgreSQL or SQLite. Postgres has more horizontal scaling headroom on the read path, but SQLite performs better when backfilling.
 
+When using PostgresSQL, note that `synchronous_commit` is set to `off` by default (you can override this by explicitly setting it to `on` in the connection URL). The rationale behind this default is that if the replica loses some recent data (e.g. following a power failure), it should be able to quickly re-sync from the upstream host.
+
 ## Backfilling
 
 When the service is started for the first time, it has to "backfill" the entire PLC operation history from the upstream instance. Until it "catches up", it will not provide up-to-date responses to queries. Depending on your hardware, it should take less than 24h to complete a backfill (at time of writing). Backfilling tends to be bottlenecked by database throughput.
+
+## Metrics and Tracing
+
+In addition to the `--metrics-addr` CLI flag, the [`OTEL_EXPORTER_OTLP_ENDPOINT`](https://opentelemetry.io/docs/languages/sdk-configuration/otlp-exporter/#otel_exporter_otlp_endpoint) env var may be set to configure trace reporting.
