@@ -374,8 +374,8 @@ func (i *Ingestor) ingestPaginated(ctx context.Context, cursor *int64, ops chan<
 		if resp.StatusCode != http.StatusOK {
 			body, _ := io.ReadAll(resp.Body)
 			resp.Body.Close()
-			i.logger.Error("http request failed", "status", resp.StatusCode)
-			return fmt.Errorf("export endpoint returned status %d: %s", resp.StatusCode, string(body))
+			i.logger.Error("http request failed", "status", resp.StatusCode, "body", body)
+			return fmt.Errorf("export endpoint returned status %d", resp.StatusCode)
 		}
 
 		var latestCreatedAt time.Time
