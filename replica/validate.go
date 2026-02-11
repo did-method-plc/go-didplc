@@ -58,7 +58,7 @@ func ValidateWorker(ctx context.Context, seqops chan *SequencedOp, validatedOps 
 // CommitWorker receives validated operations and commits them to the database in batches.
 // Only a single commit worker should run to avoid database contention.
 // Note: responsible for removing from InFlight after commit
-func CommitWorker(ctx context.Context, validatedOps <-chan ValidatedOp, infl *InFlight, store didplc.OpStore, flushCh <-chan chan struct{}) {
+func CommitWorker(ctx context.Context, validatedOps <-chan ValidatedOp, infl *InFlight, store didplc.OpStore, flushCh <-chan chan struct{}, state *ReplicaState) {
 	batch := make([]ValidatedOp, 0, batchSize)
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
@@ -91,6 +91,15 @@ func CommitWorker(ctx context.Context, validatedOps <-chan ValidatedOp, infl *In
 				return
 			}
 		}
+
+		// Update last committed op time
+		maxTime := state.GetLastCommittedOpTime()
+		for _, vop := range batch {
+			if vop.PrepOp.CreatedAt.After(maxTime) {
+				maxTime = vop.PrepOp.CreatedAt
+			}
+		}
+		state.SetLastCommittedOpTime(maxTime)
 
 		// Remove all from InFlight
 		for _, vop := range batch {

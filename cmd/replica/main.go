@@ -133,7 +133,8 @@ func run(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("failed to create store: %w", err)
 	}
 
-	server := replica.NewServer(store, httpAddr, logger)
+	state := replica.NewReplicaState()
+	server := replica.NewServer(store, state, httpAddr, logger)
 	g, gctx := errgroup.WithContext(ctx)
 
 	g.Go(server.Run)
@@ -146,7 +147,7 @@ func run(ctx context.Context, cmd *cli.Command) error {
 	})
 
 	if !noIngest {
-		ingestor, err := replica.NewIngestor(store, directoryURL, cursorOverride, numWorkers, logger)
+		ingestor, err := replica.NewIngestor(store, state, directoryURL, cursorOverride, numWorkers, logger)
 		if err != nil {
 			return err
 		}

@@ -479,7 +479,7 @@ func TestCommitWorker_CommitsBatch(t *testing.T) {
 
 	workerDone := make(chan struct{})
 	go func() {
-		CommitWorker(ctx, validatedOps, infl, store, flushCh)
+		CommitWorker(ctx, validatedOps, infl, store, flushCh, NewReplicaState())
 		close(workerDone)
 	}()
 
@@ -525,7 +525,7 @@ func TestCommitWorker_FlushOnClose(t *testing.T) {
 	close(validatedOps)
 
 	// run synchronously — CommitWorker returns when channel is closed
-	CommitWorker(ctx, validatedOps, infl, store, flushCh)
+	CommitWorker(ctx, validatedOps, infl, store, flushCh, NewReplicaState())
 
 	head, err := store.GetLatest(ctx, did)
 	assert.NoError(err)

@@ -92,6 +92,7 @@ var (
 // validates them, and commits them to the local store.
 type Ingestor struct {
 	store              *GormOpStore
+	state              *ReplicaState
 	directoryURL       string
 	parsedDirectoryURL *url.URL
 	cursorHost         string
@@ -105,13 +106,14 @@ type Ingestor struct {
 
 // NewIngestor creates a new Ingestor. Pass startCursor == -1 to resume from
 // the cursor stored in the database.
-func NewIngestor(store *GormOpStore, directoryURL string, startCursor int64, numWorkers int, logger *slog.Logger) (*Ingestor, error) {
+func NewIngestor(store *GormOpStore, state *ReplicaState, directoryURL string, startCursor int64, numWorkers int, logger *slog.Logger) (*Ingestor, error) {
 	parsedDirectoryURL, err := url.Parse(directoryURL)
 	if err != nil {
 		return nil, err
 	}
 	return &Ingestor{
 		store:              store,
+		state:              state,
 		directoryURL:       directoryURL,
 		parsedDirectoryURL: parsedDirectoryURL,
 		cursorHost:         parsedDirectoryURL.Host, // "host" or "host:port"
@@ -168,7 +170,7 @@ func (i *Ingestor) Run(ctx context.Context) error {
 
 	// Start single commit worker
 	flushCh := make(chan chan struct{})
-	go CommitWorker(ctx, validatedOps, infl, i.store, flushCh)
+	go CommitWorker(ctx, validatedOps, infl, i.store, flushCh, i.state)
 
 	// Periodically persist the resume cursor and record queue metrics
 	go func() {

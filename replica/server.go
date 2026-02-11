@@ -39,14 +39,16 @@ type DIDDataResponse struct {
 // Server holds the HTTP server and its dependencies
 type Server struct {
 	store  *GormOpStore
+	state  *ReplicaState
 	addr   string
 	logger *slog.Logger
 }
 
 // NewServer creates a new HTTP server
-func NewServer(store *GormOpStore, addr string, logger *slog.Logger) *Server {
+func NewServer(store *GormOpStore, state *ReplicaState, addr string, logger *slog.Logger) *Server {
 	return &Server{
 		store:  store,
+		state:  state,
 		addr:   addr,
 		logger: logger.With("component", "server"),
 	}
@@ -77,9 +79,15 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 
 // handleHealth handles GET /_health - returns version information
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
-	s.writeJSON(w, "application/json", map[string]string{
+	resp := map[string]string{
 		"version": versioninfo.Short(),
-	})
+	}
+	if s.state != nil {
+		if t := s.state.GetLastCommittedOpTime(); !t.IsZero() {
+			resp["lastCommittedOpTime"] = formatTimestamp(t)
+		}
+	}
+	s.writeJSON(w, "application/json", resp)
 }
 
 // formatTimestamp formats a time.Time as a JS-style ISO 8601 timestamp.

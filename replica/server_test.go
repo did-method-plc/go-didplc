@@ -26,7 +26,7 @@ func newTestServer(t *testing.T) (http.Handler, *GormOpStore) {
 	sqlDB.SetMaxOpenConns(1)
 	t.Cleanup(func() { sqlDB.Close() })
 
-	s := NewServer(store, ":0", logger)
+	s := NewServer(store, nil, ":0", logger)
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{did}/log/audit", s.handleDIDLogAudit)
 	mux.HandleFunc("GET /{did}/log/last", s.handleDIDLogLast)
