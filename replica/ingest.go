@@ -94,6 +94,7 @@ type Ingestor struct {
 	store              *GormOpStore
 	directoryURL       string
 	parsedDirectoryURL *url.URL
+	cursorHost         string
 	numWorkers         int
 	startCursor        int64
 	userAgent          string
@@ -113,6 +114,7 @@ func NewIngestor(store *GormOpStore, directoryURL string, startCursor int64, num
 		store:              store,
 		directoryURL:       directoryURL,
 		parsedDirectoryURL: parsedDirectoryURL,
+		cursorHost:         parsedDirectoryURL.Host, // "host" or "host:port"
 		numWorkers:         numWorkers,
 		startCursor:        startCursor,
 		userAgent:          fmt.Sprintf("go-didplc-replica/%s", versioninfo.Short()),
@@ -132,7 +134,7 @@ func (i *Ingestor) Run(ctx context.Context) error {
 	cursor := i.startCursor
 	if cursor == -1 {
 		var err error
-		cursor, err = i.store.GetCursor(ctx, i.directoryURL)
+		cursor, err = i.store.GetCursor(ctx, i.cursorHost)
 		if err != nil {
 			return err
 		}
@@ -178,10 +180,10 @@ func (i *Ingestor) Run(ctx context.Context) error {
 				return
 			case <-ticker.C:
 				resumeCursor := infl.GetResumeCursor()
-				if err := i.store.PutCursor(ctx, i.directoryURL, resumeCursor); err != nil {
+				if err := i.store.PutCursor(ctx, i.cursorHost, resumeCursor); err != nil {
 					i.logger.Error("failed to persist cursor", "error", err)
 				} else {
-					i.logger.Info("persisted cursor", "cursor", resumeCursor, "host", i.directoryURL)
+					i.logger.Info("persisted cursor", "cursor", resumeCursor, "host", i.cursorHost)
 				}
 				IngestCursorGauge.Record(ctx, resumeCursor)
 				IngestedOpsQueueGauge.Record(ctx, int64(len(ingestedOps)))
