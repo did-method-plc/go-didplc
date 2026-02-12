@@ -101,6 +101,7 @@ var _ didplc.OpStore = (*GormOpStore)(nil)
 func NewGormOpStoreWithDialector(dialector gorm.Dialector, logger *slog.Logger) (*GormOpStore, error) {
 	db, err := gorm.Open(dialector, &gorm.Config{
 		//PrepareStmt:            true, // Doesn't seem to work well with postgres
+		TranslateError: true,
 		Logger: slogGorm.New(
 			slogGorm.WithHandler(logger.With("component", "opstore").Handler()),
 			slogGorm.WithTraceAll(),
