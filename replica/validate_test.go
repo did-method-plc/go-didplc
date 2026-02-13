@@ -618,3 +618,112 @@ func TestValidateInner_RotationKeyChange(t *testing.T) {
 	assert.NoError(err)
 	assert.Equal(1, prepOp.KeyIndex, "should be signed by second rotation key")
 }
+
+func TestCommitWorker_UpdatesReplicaState(t *testing.T) {
+	assert := assert.New(t)
+	ctx := context.Background()
+	store := didplc.NewMemOpStore()
+	infl := NewInFlight(-1)
+	state := NewReplicaState()
+
+	priv, pubKey := generateKey(t)
+	op, did := createGenesis(t, priv, []string{pubKey})
+	opTime := time.Date(2024, 6, 15, 12, 0, 0, 0, time.UTC)
+
+	prepOp, err := didplc.VerifyOperation(ctx, store, did, op, opTime)
+	require.NoError(t, err)
+
+	validatedOps := make(chan ValidatedOp, 1)
+	flushCh := make(chan chan struct{})
+
+	infl.AddInFlight(did, 1)
+	validatedOps <- ValidatedOp{Seq: 1, PrepOp: prepOp}
+	close(validatedOps)
+
+	CommitWorker(ctx, validatedOps, infl, store, flushCh, state)
+
+	assert.Equal(opTime, state.GetLastCommittedOpTime(),
+		"ReplicaState should reflect the committed op time")
+}
+
+func TestCommitWorker_ReplicaState_MaxTime(t *testing.T) {
+	assert := assert.New(t)
+	ctx := context.Background()
+	store := didplc.NewMemOpStore()
+	infl := NewInFlight(-1)
+	state := NewReplicaState()
+
+	// Create two independent DIDs with different timestamps
+	priv1, pubKey1 := generateKey(t)
+	op1, did1 := createGenesis(t, priv1, []string{pubKey1})
+	t1 := time.Date(2024, 6, 15, 10, 0, 0, 0, time.UTC)
+
+	priv2, pubKey2 := generateKey(t)
+	op2, did2 := createGenesis(t, priv2, []string{pubKey2})
+	t2 := time.Date(2024, 6, 15, 14, 0, 0, 0, time.UTC) // later
+
+	prepOp1, err := didplc.VerifyOperation(ctx, store, did1, op1, t1)
+	require.NoError(t, err)
+	prepOp2, err := didplc.VerifyOperation(ctx, store, did2, op2, t2)
+	require.NoError(t, err)
+
+	validatedOps := make(chan ValidatedOp, 2)
+	flushCh := make(chan chan struct{})
+
+	infl.AddInFlight(did1, 1)
+	infl.AddInFlight(did2, 2)
+	validatedOps <- ValidatedOp{Seq: 1, PrepOp: prepOp1}
+	validatedOps <- ValidatedOp{Seq: 2, PrepOp: prepOp2}
+	close(validatedOps)
+
+	CommitWorker(ctx, validatedOps, infl, store, flushCh, state)
+
+	assert.Equal(t2, state.GetLastCommittedOpTime(),
+		"ReplicaState should reflect the later of the two op times")
+}
+
+func TestEndToEnd_ValidateThenCommitWorker(t *testing.T) {
+	assert := assert.New(t)
+	ctx := context.Background()
+	store := didplc.NewMemOpStore()
+	infl := NewInFlight(-1)
+	state := NewReplicaState()
+
+	priv, pubKey := generateKey(t)
+	genesis, did := createGenesis(t, priv, []string{pubKey})
+	t0 := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	seqops := make(chan *SequencedOp, 1)
+	validatedOps := make(chan ValidatedOp, 1)
+	flushCh := make(chan chan struct{})
+
+	seqop := &SequencedOp{
+		DID:       did,
+		CID:       genesis.CID().String(),
+		Operation: genesis,
+		CreatedAt: t0,
+		Seq:       1,
+	}
+	infl.AddInFlight(did, 1)
+	seqops <- seqop
+	close(seqops)
+
+	// Run validate worker — it reads from seqops and writes to validatedOps
+	ValidateWorker(ctx, seqops, validatedOps, infl, store)
+	close(validatedOps)
+
+	// Run commit worker — it reads from validatedOps and commits to store
+	CommitWorker(ctx, validatedOps, infl, store, flushCh, state)
+
+	// Verify the op was committed
+	head, err := store.GetLatest(ctx, did)
+	assert.NoError(err)
+	require.NotNil(t, head)
+	assert.Equal(genesis.CID().String(), head.OpCid)
+
+	// Verify state was updated
+	assert.Equal(t0, state.GetLastCommittedOpTime())
+
+	// Verify inflight was cleaned up
+	assert.True(infl.AddInFlight(did, 2), "DID should be available after pipeline completes")
+}

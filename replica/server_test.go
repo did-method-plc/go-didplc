@@ -16,7 +16,7 @@ import (
 	"gorm.io/driver/sqlite"
 )
 
-func newTestServer(t *testing.T) (http.Handler, *GormOpStore) {
+func newTestServerWithState(t *testing.T, state *ReplicaState) (http.Handler, *GormOpStore) {
 	t.Helper()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	store, err := NewGormOpStoreWithDialector(sqlite.Open(":memory:"), logger)
@@ -26,8 +26,9 @@ func newTestServer(t *testing.T) (http.Handler, *GormOpStore) {
 	sqlDB.SetMaxOpenConns(1)
 	t.Cleanup(func() { sqlDB.Close() })
 
-	s := NewServer(store, nil, ":0", logger)
+	s := NewServer(store, state, ":0", logger)
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /_health", s.handleHealth)
 	mux.HandleFunc("GET /{did}/log/audit", s.handleDIDLogAudit)
 	mux.HandleFunc("GET /{did}/log/last", s.handleDIDLogLast)
 	mux.HandleFunc("GET /{did}/log", s.handleDIDLog)
@@ -35,6 +36,11 @@ func newTestServer(t *testing.T) (http.Handler, *GormOpStore) {
 	mux.HandleFunc("GET /{did}", s.handleDIDDoc)
 	mux.HandleFunc("GET /{$}", s.handleIndex)
 	return mux, store
+}
+
+func newTestServer(t *testing.T) (http.Handler, *GormOpStore) {
+	t.Helper()
+	return newTestServerWithState(t, nil)
 }
 
 func TestHandleIndex(t *testing.T) {
@@ -333,4 +339,121 @@ func TestHandleDIDLogLast_NotFound(t *testing.T) {
 	handler.ServeHTTP(w, httptest.NewRequest("GET", "/did:plc:nonexistent/log/last", nil))
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestHandleHealth_NoState(t *testing.T) {
+	handler, _ := newTestServerWithState(t, nil)
+
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, httptest.NewRequest("GET", "/_health", nil))
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
+
+	var resp map[string]string
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Contains(t, resp, "version")
+	assert.NotContains(t, resp, "lastCommittedOpTime")
+}
+
+func TestHandleHealth_WithState(t *testing.T) {
+	state := NewReplicaState()
+	ts := time.Date(2024, 6, 15, 12, 30, 45, 123000000, time.UTC)
+	state.SetLastCommittedOpTime(ts)
+
+	handler, _ := newTestServerWithState(t, state)
+
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, httptest.NewRequest("GET", "/_health", nil))
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var resp map[string]string
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Contains(t, resp, "version")
+	assert.Equal(t, "2024-06-15T12:30:45.123Z", resp["lastCommittedOpTime"])
+}
+
+func TestHandleHealth_WithState_ZeroTime(t *testing.T) {
+	state := NewReplicaState()
+	// Don't set any time — it's the zero value
+
+	handler, _ := newTestServerWithState(t, state)
+
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, httptest.NewRequest("GET", "/_health", nil))
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var resp map[string]string
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Contains(t, resp, "version")
+	assert.NotContains(t, resp, "lastCommittedOpTime", "zero time should be omitted")
+}
+
+func TestHandleDIDDoc_Tombstone(t *testing.T) {
+	handler, store := newTestServer(t)
+	ctx := context.Background()
+
+	priv, pubKey := generateKey(t)
+	genesis, did := createGenesis(t, priv, []string{pubKey})
+	t0 := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	genesisCID := commitGenesis(t, ctx, store, genesis, did, t0)
+
+	tombstone := &didplc.TombstoneOp{Type: "plc_tombstone", Prev: genesisCID}
+	require.NoError(t, tombstone.Sign(priv))
+	prepOp, err := didplc.VerifyOperation(ctx, store, did, tombstone, t0.Add(time.Hour))
+	require.NoError(t, err)
+	require.NoError(t, store.CommitOperations(ctx, []*didplc.PreparedOperation{prepOp}))
+
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, httptest.NewRequest("GET", "/"+did, nil))
+
+	assert.Equal(t, http.StatusGone, w.Code)
+}
+
+func TestHandleDIDDoc_LastModifiedHeader(t *testing.T) {
+	handler, store := newTestServer(t)
+	ctx := context.Background()
+
+	priv, pubKey := generateKey(t)
+	genesis, did := createGenesis(t, priv, []string{pubKey})
+	t0 := time.Date(2024, 6, 15, 12, 30, 45, 0, time.UTC)
+	commitGenesis(t, ctx, store, genesis, did, t0)
+
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, httptest.NewRequest("GET", "/"+did, nil))
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "2024-06-15T12:30:45.000Z", w.Header().Get("Last-Modified"))
+}
+
+func TestFormatTimestamp(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    time.Time
+		expected string
+	}{
+		{
+			name:     "UTC",
+			input:    time.Date(2024, 6, 15, 12, 30, 45, 123000000, time.UTC),
+			expected: "2024-06-15T12:30:45.123Z",
+		},
+		{
+			name:     "non-UTC converted",
+			input:    time.Date(2024, 6, 15, 14, 30, 45, 0, time.FixedZone("EST+2", 2*60*60)),
+			expected: "2024-06-15T12:30:45.000Z",
+		},
+		{
+			name:     "zero milliseconds",
+			input:    time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+			expected: "2024-01-01T00:00:00.000Z",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, formatTimestamp(tt.input))
+		})
+	}
 }

@@ -23,7 +23,7 @@ export PGUSER=pg
 export PGPASSWORD=password
 export PGDATABASE=postgres
 export DATABASE_URL="postgresql://pg:password@localhost:5433/postgres"
-sleep 2
+until pg_isready -q; do sleep 0.1; done
 "$@"
 code=$?
 
