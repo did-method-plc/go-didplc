@@ -24,6 +24,8 @@ jobs:
         run: make build
       - name: Test
         run: make test
+      - name: Test (race detector)
+        run: make test-race
   lint:
     runs-on: ubuntu-latest
     steps:
