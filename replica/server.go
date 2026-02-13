@@ -23,7 +23,7 @@ ______ |  |   ____           _______   ____ ______ |  | |__| ____ _____
 
 This is a did:plc read-replica service.
 
-  Source: https://github.com/did-method-plc/go-didplc/tree/main/cmd/replica
+  Source: https://github.com/did-method-plc/go-didplc/tree/main/cmd/plc-replica
  Version: %s
 `
 
