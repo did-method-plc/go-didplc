@@ -28,7 +28,7 @@ func main() {
 			&cli.StringFlag{
 				Name:    "bind",
 				Usage:   "HTTP server listen address",
-				Value:   ":8080",
+				Value:   ":6780",
 				Sources: cli.EnvVars("REPLICA_BIND"),
 			},
 			&cli.StringFlag{
