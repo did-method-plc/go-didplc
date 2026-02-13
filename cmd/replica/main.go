@@ -21,8 +21,8 @@ func main() {
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:    "db-url",
-				Usage:   "Database URL (e.g. sqlite://replica.db, postgres://user:pass@host/db)",
-				Value:   "sqlite://replica.db",
+				Usage:   "Database URL (e.g. sqlite://replica.db?_journal_mode=WAL, postgres://user:pass@host/db)",
+				Value:   "sqlite://replica.db?mode=rwc&cache=shared&_journal_mode=WAL",
 				Sources: cli.EnvVars("DATABASE_URL"),
 			},
 			&cli.StringFlag{

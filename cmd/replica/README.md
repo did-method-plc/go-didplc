@@ -53,7 +53,7 @@ Although these differences are spec-compliant, some PLC client libraries may hav
 
 The service supports either PostgreSQL or SQLite. Postgres has more horizontal scaling headroom on the read path, but SQLite performs better when backfilling.
 
-When using PostgresSQL, note that `synchronous_commit` is set to `off` by default (you can override this by explicitly setting it to `on` in the connection URL). The rationale behind this default is that if the replica loses some recent data (e.g. following a power failure), it should be able to quickly re-sync from the upstream host.
+When using PostgresSQL, you may wish to set `synchronous_commit` to `off`. This can improve ingest performance, at the cost potentially losing some recently-committed data after e.g. a power failure. Since this is a replica service, it should be able to quickly re-sync from the upstream host if that happens, so no data is truly lost.
 
 ## Backfilling
 

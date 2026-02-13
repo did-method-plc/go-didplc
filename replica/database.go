@@ -144,41 +144,20 @@ func NewGormOpStore(dbURL string, logger *slog.Logger) (*GormOpStore, error) {
 		return nil, fmt.Errorf("failed to parse database URL: %w", err)
 	}
 
+	var dialector gorm.Dialector
 	switch u.Scheme {
 	case "sqlite":
 		dbPath := u.Host + u.Path
-		slog.Info("using database", "type", "sqlite", "path", dbPath)
-		return newGormOpStoreWithSqlite(dbPath, logger)
+		logger.Info("using database", "type", "sqlite", "path", dbPath)
+		dialector = sqlite.Open(dbPath)
 	case "postgres", "postgresql":
-		slog.Info("using database", "type", "postgres")
-		return newGormOpStoreWithPostgres(dbURL, logger)
+		logger.Info("using database", "type", "postgres")
+		dialector = postgres.Open(dbURL)
 	default:
 		return nil, fmt.Errorf("unsupported database URL scheme: %q (expected sqlite://, postgres://, or postgresql://)", u.Scheme)
 	}
-}
 
-func newGormOpStoreWithSqlite(dbPath string, logger *slog.Logger) (*GormOpStore, error) {
-	return NewGormOpStoreWithDialector(
-		sqlite.Open(dbPath+"?mode=rwc&cache=shared&_journal_mode=WAL"),
-		logger,
-	)
-}
-
-func newGormOpStoreWithPostgres(dsn string, logger *slog.Logger) (*GormOpStore, error) {
-	u, err := url.Parse(dsn)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse postgres URL: %w", err)
-	}
-	q := u.Query()
-	if !q.Has("synchronous_commit") {
-		// Since we're a replica, if we lose data we can just re-fetch it from the origin.
-		q.Set("synchronous_commit", "off")
-	}
-	u.RawQuery = q.Encode()
-	return NewGormOpStoreWithDialector(
-		postgres.Open(u.String()),
-		logger,
-	)
+	return NewGormOpStoreWithDialector(dialector, logger)
 }
 
 // GetLatest implements didplc.OpStore
