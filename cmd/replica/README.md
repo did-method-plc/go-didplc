@@ -12,15 +12,15 @@ USAGE:
    plc-replica [global options]
 
 GLOBAL OPTIONS:
-   --db-url string                  Database URL (e.g. sqlite://replica.db, postgres://user:pass@host/db) (default: "sqlite://replica.db") [$DATABASE_URL]
-   --bind string                    HTTP server listen address (default: ":8080") [$REPLICA_BIND]
+   --db-url string                  Database URL (e.g. sqlite://replica.db?_journal_mode=WAL, postgres://user:pass@host/db) (default: "sqlite://replica.db?mode=rwc&cache=shared&_journal_mode=WAL") [$DATABASE_URL]
+   --bind string                    HTTP server listen address (default: ":6780") [$REPLICA_BIND]
    --metrics-addr string            Metrics HTTP server listen address (default: ":9464") [$METRICS_ADDR]
-   --no-ingest                      Disable ingestion from upstream directory (default: false) [$NO_INGEST]
+   --no-ingest                      Disable ingestion from upstream directory [$NO_INGEST]
    --upstream-directory-url string  Upstream PLC directory base URL (default: "https://plc.directory") [$UPSTREAM_DIRECTORY_URL]
    --cursor-override int            Initial cursor value used to sync from the upstream host. May be useful when switching the upstream host (default: -1) [$CURSOR_OVERRIDE]
    --num-workers int                Number of validation worker threads (0 = auto) (default: 0) [$NUM_WORKERS]
    --log-level string               Log level (debug, info, warn, error) (default: "info") [$LOG_LEVEL]
-   --log-json                       Output logs in JSON format (default: false) [$LOG_JSON]
+   --log-json                       Output logs in JSON format [$LOG_JSON]
    --help, -h                       show help
 ```
 
