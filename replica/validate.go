@@ -41,8 +41,17 @@ func ValidateWorker(ctx context.Context, seqops chan *SequencedOp, validatedOps 
 			prepOp, err := validateInner(ctx, seqop, store)
 			if err != nil {
 				// Validation failed - remove from InFlight and skip
-				slog.Warn("validation failed", "did", seqop.DID, "seq", seqop.Seq, "cid", seqop.CID, "error", err)
 				infl.RemoveInFlight(seqop.DID, seqop.Seq)
+
+				// Check if this op was already committed (i.e. a replay after reconnect)
+				existing, lookupErr := store.GetEntry(ctx, seqop.DID, seqop.CID)
+				if lookupErr == nil && existing != nil {
+					// This is normal, immediately after a reconnect
+					slog.Info("ignoring replayed op", "did", seqop.DID, "seq", seqop.Seq, "cid", seqop.CID)
+				} else {
+					// This is a more significant event
+					slog.Warn("validation failed", "did", seqop.DID, "seq", seqop.Seq, "cid", seqop.CID, "error", err)
+				}
 				continue
 			}
 
