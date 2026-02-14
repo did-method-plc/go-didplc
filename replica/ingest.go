@@ -196,7 +196,10 @@ func (i *Ingestor) Run(ctx context.Context) error {
 	}()
 
 	// Start ingestion state machine in a goroutine
-	go i.ingestLoop(ctx, &cursor, ingestedOps)
+	go func() {
+		i.ingestLoop(ctx, &cursor, ingestedOps)
+		close(ingestedOps)
+	}()
 
 	// Process operations from ingestion channel and add to InFlight before sending to workers
 	for seqop := range ingestedOps {

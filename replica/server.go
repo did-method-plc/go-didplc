@@ -1,6 +1,7 @@
 package replica
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -54,8 +55,8 @@ func NewServer(store *GormOpStore, state *ReplicaState, addr string, logger *slo
 	}
 }
 
-// Run starts the HTTP server (blocking)
-func (s *Server) Run() error {
+// Run starts the HTTP server (blocking). It shuts down gracefully when ctx is cancelled.
+func (s *Server) Run(ctx context.Context) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /_health", s.handleHealth)
 	mux.HandleFunc("GET /{did}/log/audit", s.handleDIDLogAudit)
@@ -67,8 +68,18 @@ func (s *Server) Run() error {
 
 	handler := otelhttp.NewHandler(mux, "")
 
+	srv := &http.Server{Addr: s.addr, Handler: handler}
+	go func() {
+		<-ctx.Done()
+		srv.Shutdown(context.Background())
+	}()
+
 	s.logger.Info("http server listening", "addr", s.addr)
-	return http.ListenAndServe(s.addr, handler)
+	err := srv.ListenAndServe()
+	if err == http.ErrServerClosed {
+		return nil
+	}
+	return err
 }
 
 // handleIndex serves the index page

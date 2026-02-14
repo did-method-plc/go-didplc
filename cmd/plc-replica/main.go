@@ -137,13 +137,24 @@ func run(ctx context.Context, cmd *cli.Command) error {
 	server := replica.NewServer(store, state, httpAddr, logger)
 	g, gctx := errgroup.WithContext(ctx)
 
-	g.Go(server.Run)
+	g.Go(func() error {
+		return server.Run(gctx)
+	})
 
 	g.Go(func() error {
 		mux := http.NewServeMux()
 		mux.Handle("/metrics", promhttp.Handler())
+		srv := &http.Server{Addr: metricsAddr, Handler: mux}
+		go func() {
+			<-gctx.Done()
+			srv.Shutdown(context.Background())
+		}()
 		slog.Info("metrics server listening", "addr", metricsAddr)
-		return http.ListenAndServe(metricsAddr, mux)
+		err := srv.ListenAndServe()
+		if err == http.ErrServerClosed {
+			return nil
+		}
+		return err
 	})
 
 	if !noIngest {
