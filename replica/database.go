@@ -148,6 +148,9 @@ func NewGormOpStore(dbURL string, logger *slog.Logger) (*GormOpStore, error) {
 	switch u.Scheme {
 	case "sqlite":
 		dbPath := u.Host + u.Path
+		if u.RawQuery != "" {
+			dbPath += "?" + u.RawQuery
+		}
 		logger.Info("using database", "type", "sqlite", "path", dbPath)
 		dialector = sqlite.Open(dbPath)
 	case "postgres", "postgresql":
