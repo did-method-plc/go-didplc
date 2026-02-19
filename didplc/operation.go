@@ -100,8 +100,8 @@ var ErrNotSignedOp = errors.New("not a signed PLC operation")
 func (op *RegularOp) CID() cid.Cid {
 	c, err := drisl.CidForValue(op)
 	if err != nil {
-		// XXX: change function signature so we don't panic? or return empty CID instead?
-		panic(err)
+		// NOTE: consider changing function signature to return err?
+		return cid.EmptyCid
 	}
 	return c
 }
@@ -265,8 +265,8 @@ func (op *RegularOp) AsOpEnum() *OpEnum {
 func (op *LegacyOp) CID() cid.Cid {
 	c, err := drisl.CidForValue(op)
 	if err != nil {
-		// XXX: change function signature so we don't panic? or return empty CID instead?
-		panic(err)
+		// NOTE: consider changing function signature to return err?
+		return cid.EmptyCid
 	}
 	return c
 }
@@ -392,8 +392,8 @@ func (op *LegacyOp) AsOpEnum() *OpEnum {
 func (op *TombstoneOp) CID() cid.Cid {
 	c, err := drisl.CidForValue(op)
 	if err != nil {
-		// XXX: change function signature so we don't panic? or return empty CID instead?
-		panic(err)
+		// NOTE: consider changing function signature to return err?
+		return cid.EmptyCid
 	}
 	return c
 }
