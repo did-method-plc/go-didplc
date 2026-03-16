@@ -510,6 +510,7 @@ func NewAtproto(priv atcrypto.PrivateKey, handle string, pdsEndpoint string, rot
 	}
 	handleURI := "at://" + handle
 	op := RegularOp{
+		Type:         "plc_operation",
 		RotationKeys: rotationKeys,
 		VerificationMethods: map[string]string{
 			"atproto": pub.DIDKey(),
@@ -542,4 +543,3 @@ func (oe *OpEnum) AsOperation() Operation {
 		return nil
 	}
 }
-
