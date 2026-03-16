@@ -191,3 +191,25 @@ func TestCreatePLC(t *testing.T) {
 	_, err = op.Doc(did)
 	assert.NoError(err)
 }
+
+func TestNewAtproto(t *testing.T) {
+	assert := assert.New(t)
+
+	priv, err := atcrypto.GeneratePrivateKeyP256()
+	if err != nil {
+		t.Fatal(err)
+	}
+	pub, err := priv.PublicKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	pubDIDKey := pub.DIDKey()
+
+	op, err := NewAtproto(priv, "handle.example.com", "https://pds.example.com", []string{pubDIDKey})
+	assert.NoError(err)
+	assert.Equal("plc_operation", op.Type)
+	assert.NoError(op.VerifySignature(pub))
+
+	_, err = op.DID()
+	assert.NoError(err)
+}
