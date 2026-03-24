@@ -61,6 +61,17 @@ type RegularOp struct {
 	Sig                 *string              `json:"sig,omitempty" cborgen:"sig,omitempty" refmt:"sig,omitempty"`
 }
 
+// returns a new unsigned RegularOp with the Type field set
+func NewRegularOp() RegularOp {
+	return RegularOp{
+		Type:                "plc_operation",
+		RotationKeys:        []string{},
+		VerificationMethods: map[string]string{},
+		AlsoKnownAs:         []string{},
+		Services:            map[string]OpService{},
+	}
+}
+
 // Represents a "tombstone" operation, which indicates that the DID has been deleted.
 type TombstoneOp struct {
 	// Type is "plc_tombstone"
@@ -498,38 +509,6 @@ func (o *OpEnum) UnmarshalJSON(b []byte) error {
 	}
 }
 
-// returns a new signed PLC operation using the provided atproto-specific metdata
-func NewAtproto(priv atcrypto.PrivateKey, handle string, pdsEndpoint string, rotationKeys []string) (RegularOp, error) {
-
-	pub, err := priv.PublicKey()
-	if err != nil {
-		return RegularOp{}, err
-	}
-	if len(rotationKeys) == 0 {
-		return RegularOp{}, fmt.Errorf("at least one rotation key is required")
-	}
-	handleURI := "at://" + handle
-	op := RegularOp{
-		RotationKeys: rotationKeys,
-		VerificationMethods: map[string]string{
-			"atproto": pub.DIDKey(),
-		},
-		AlsoKnownAs: []string{handleURI},
-		Services: map[string]OpService{
-			"atproto_pds": OpService{
-				Type:     "AtprotoPersonalDataServer",
-				Endpoint: pdsEndpoint,
-			},
-		},
-		Prev: nil,
-		Sig:  nil,
-	}
-	if err := op.Sign(priv); err != nil {
-		return RegularOp{}, err
-	}
-	return op, nil
-}
-
 func (oe *OpEnum) AsOperation() Operation {
 	if oe.Regular != nil {
 		return oe.Regular
@@ -542,4 +521,3 @@ func (oe *OpEnum) AsOperation() Operation {
 		return nil
 	}
 }
-
