@@ -20,7 +20,7 @@ func TestVerifySignatureHardWay(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	obj := map[string]interface{}{
+	obj := map[string]any{
 		"prev": "bafyreigcxay6ucqlwowfpu35alyxqtv3c4vsj7gmdtmnidsnqs6nblyarq",
 		"type": "plc_operation",
 		"services": map[string]any{
@@ -64,7 +64,7 @@ func TestVerifySignatureHardWayNew(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	obj := map[string]interface{}{
+	obj := map[string]any{
 		"prev": nil,
 		"type": "plc_operation",
 		"services": map[string]any{
@@ -107,7 +107,7 @@ func TestVerifySignatureLegacyGenesis(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	obj := map[string]interface{}{
+	obj := map[string]any{
 		"prev":        nil,
 		"type":        "create",
 		"handle":      "dan.bsky.social",
