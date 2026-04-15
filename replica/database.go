@@ -254,7 +254,7 @@ func (db *GormOpStore) CommitOperations(ctx context.Context, ops []*didplc.Prepa
 				}
 
 				// Update previous operation's last_child and allowed_keys_count
-				if err := tx.Model(&OperationRecord{}).Where("did = ? AND cid = ?", prepOp.DID, prepOp.Op.PrevCIDStr()).Updates(map[string]interface{}{
+				if err := tx.Model(&OperationRecord{}).Where("did = ? AND cid = ?", prepOp.DID, prepOp.Op.PrevCIDStr()).Updates(map[string]any{
 					"last_child":         prepOp.OpCid,
 					"allowed_keys_count": prepOp.KeyIndex,
 				}).Error; err != nil {

@@ -484,7 +484,7 @@ func (o *OpEnum) MarshalJSON() ([]byte, error) {
 }
 
 func (o *OpEnum) UnmarshalJSON(b []byte) error {
-	var typeMap map[string]interface{}
+	var typeMap map[string]any
 	err := json.Unmarshal(b, &typeMap)
 	if err != nil {
 		return err
