@@ -11,8 +11,8 @@ import (
 
 	"github.com/bluesky-social/indigo/atproto/atcrypto"
 
-	"github.com/ipfs/go-cid"
-	cbor "github.com/ipfs/go-ipld-cbor"
+	"github.com/hyphacoop/go-dasl/cid"
+	"github.com/hyphacoop/go-dasl/drisl"
 )
 
 // Interface implemented by all operation types.
@@ -45,20 +45,20 @@ type Operation interface {
 }
 
 type OpService struct {
-	Type     string `json:"type" cborgen:"type"`
-	Endpoint string `json:"endpoint" cborgen:"endpoint"`
+	Type     string `json:"type" cborgen:"type" cbor:"type"`
+	Endpoint string `json:"endpoint" cborgen:"endpoint" cbor:"endpoint"`
 }
 
 // Represents normal operation under the current version of the PLC specification.
 type RegularOp struct {
 	// Type is "plc_operation"
-	Type                string               `json:"type" cborgen:"type"`
-	RotationKeys        []string             `json:"rotationKeys" cborgen:"rotationKeys"`
-	VerificationMethods map[string]string    `json:"verificationMethods" cborgen:"verificationMethods"`
-	AlsoKnownAs         []string             `json:"alsoKnownAs" cborgen:"alsoKnownAs"`
-	Services            map[string]OpService `json:"services" cborgen:"services"`
-	Prev                *string              `json:"prev" cborgen:"prev"`
-	Sig                 *string              `json:"sig,omitempty" cborgen:"sig,omitempty" refmt:"sig,omitempty"`
+	Type                string               `json:"type" cborgen:"type" cbor:"type"`
+	RotationKeys        []string             `json:"rotationKeys" cborgen:"rotationKeys" cbor:"rotationKeys"`
+	VerificationMethods map[string]string    `json:"verificationMethods" cborgen:"verificationMethods" cbor:"verificationMethods"`
+	AlsoKnownAs         []string             `json:"alsoKnownAs" cborgen:"alsoKnownAs" cbor:"alsoKnownAs"`
+	Services            map[string]OpService `json:"services" cborgen:"services" cbor:"services"`
+	Prev                *string              `json:"prev" cborgen:"prev" cbor:"prev"`
+	Sig                 *string              `json:"sig,omitempty" cborgen:"sig,omitempty" cbor:"sig,omitempty" refmt:"sig,omitempty"`
 }
 
 // returns a new unsigned RegularOp with the Type field set
@@ -75,9 +75,9 @@ func NewRegularOp() RegularOp {
 // Represents a "tombstone" operation, which indicates that the DID has been deleted.
 type TombstoneOp struct {
 	// Type is "plc_tombstone"
-	Type string  `json:"type" cborgen:"type"`
-	Prev string  `json:"prev" cborgen:"prev"`
-	Sig  *string `json:"sig,omitempty" cborgen:"sig,omitempty" refmt:"sig,omitempty"`
+	Type string  `json:"type" cborgen:"type" cbor:"type"`
+	Prev string  `json:"prev" cborgen:"prev" cbor:"prev"`
+	Sig  *string `json:"sig,omitempty" cborgen:"sig,omitempty" cbor:"sig,omitempty" refmt:"sig,omitempty"`
 }
 
 // Represents a valid legacy operation.
@@ -85,13 +85,13 @@ type TombstoneOp struct {
 // New operations should not be created in this legacy format, but existing operations in the directory are still supported by the specification.
 type LegacyOp struct {
 	// Type is "create"
-	Type        string  `json:"type" cborgen:"type"`
-	SigningKey  string  `json:"signingKey" cborgen:"signingKey"`
-	RecoveryKey string  `json:"recoveryKey" cborgen:"recoveryKey"`
-	Handle      string  `json:"handle" cborgen:"handle"`
-	Service     string  `json:"service" cborgen:"service"`
-	Prev        *string `json:"prev" cborgen:"prev"`
-	Sig         *string `json:"sig,omitempty" cborgen:"sig,omitempty" refmt:"sig,omitempty"`
+	Type        string  `json:"type" cborgen:"type" cbor:"type"`
+	SigningKey  string  `json:"signingKey" cborgen:"signingKey" cbor:"signingKey"`
+	RecoveryKey string  `json:"recoveryKey" cborgen:"recoveryKey" cbor:"recoveryKey"`
+	Handle      string  `json:"handle" cborgen:"handle" cbor:"handle"`
+	Service     string  `json:"service" cborgen:"service" cbor:"service"`
+	Prev        *string `json:"prev" cborgen:"prev" cbor:"prev"`
+	Sig         *string `json:"sig,omitempty" cborgen:"sig,omitempty" cbor:"sig,omitempty" refmt:"sig,omitempty"`
 }
 
 var _ Operation = (*RegularOp)(nil)
@@ -108,24 +108,13 @@ type OpEnum struct {
 var ErrNotGenesisOp = errors.New("not a genesis PLC operation")
 var ErrNotSignedOp = errors.New("not a signed PLC operation")
 
-func init() {
-	cbor.RegisterCborType(OpService{})
-	cbor.RegisterCborType(RegularOp{})
-	cbor.RegisterCborType(TombstoneOp{})
-	cbor.RegisterCborType(LegacyOp{})
-}
-
-func computeCID(b []byte) cid.Cid {
-	cidBuilder := cid.V1Builder{Codec: 0x71, MhType: 0x12, MhLength: 0}
-	c, err := cidBuilder.Sum(b)
+func (op *RegularOp) CID() cid.Cid {
+	c, err := drisl.CidForValue(op)
 	if err != nil {
-		return cid.Undef
+		// NOTE: consider changing function signature to return err?
+		return cid.EmptyCid
 	}
 	return c
-}
-
-func (op *RegularOp) CID() cid.Cid {
-	return computeCID(op.SignedCBORBytes())
 }
 
 func (op *RegularOp) UnsignedCBORBytes() []byte {
@@ -139,7 +128,7 @@ func (op *RegularOp) UnsignedCBORBytes() []byte {
 		Sig:                 nil,
 	}
 
-	out, err := cbor.DumpObject(unsigned)
+	out, err := drisl.Marshal(unsigned)
 	if err != nil {
 		return nil
 	}
@@ -147,7 +136,7 @@ func (op *RegularOp) UnsignedCBORBytes() []byte {
 }
 
 func (op *RegularOp) SignedCBORBytes() []byte {
-	out, err := cbor.DumpObject(op)
+	out, err := drisl.Marshal(op)
 	if err != nil {
 		return nil
 	}
@@ -285,7 +274,12 @@ func (op *RegularOp) AsOpEnum() *OpEnum {
 }
 
 func (op *LegacyOp) CID() cid.Cid {
-	return computeCID(op.SignedCBORBytes())
+	c, err := drisl.CidForValue(op)
+	if err != nil {
+		// NOTE: consider changing function signature to return err?
+		return cid.EmptyCid
+	}
+	return c
 }
 
 func (op *LegacyOp) UnsignedCBORBytes() []byte {
@@ -298,7 +292,7 @@ func (op *LegacyOp) UnsignedCBORBytes() []byte {
 		Prev:        op.Prev,
 		Sig:         nil,
 	}
-	out, err := cbor.DumpObject(unsigned)
+	out, err := drisl.Marshal(unsigned)
 	if err != nil {
 		return nil
 	}
@@ -306,7 +300,7 @@ func (op *LegacyOp) UnsignedCBORBytes() []byte {
 }
 
 func (op *LegacyOp) SignedCBORBytes() []byte {
-	out, err := cbor.DumpObject(op)
+	out, err := drisl.Marshal(op)
 	if err != nil {
 		return nil
 	}
@@ -407,7 +401,12 @@ func (op *LegacyOp) AsOpEnum() *OpEnum {
 }
 
 func (op *TombstoneOp) CID() cid.Cid {
-	return computeCID(op.SignedCBORBytes())
+	c, err := drisl.CidForValue(op)
+	if err != nil {
+		// NOTE: consider changing function signature to return err?
+		return cid.EmptyCid
+	}
+	return c
 }
 
 func (op *TombstoneOp) UnsignedCBORBytes() []byte {
@@ -416,7 +415,7 @@ func (op *TombstoneOp) UnsignedCBORBytes() []byte {
 		Prev: op.Prev,
 		Sig:  nil,
 	}
-	out, err := cbor.DumpObject(unsigned)
+	out, err := drisl.Marshal(unsigned)
 	if err != nil {
 		return nil
 	}
@@ -424,7 +423,7 @@ func (op *TombstoneOp) UnsignedCBORBytes() []byte {
 }
 
 func (op *TombstoneOp) SignedCBORBytes() []byte {
-	out, err := cbor.DumpObject(op)
+	out, err := drisl.Marshal(op)
 	if err != nil {
 		return nil
 	}
