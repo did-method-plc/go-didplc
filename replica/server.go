@@ -10,6 +10,7 @@ import (
 
 	"github.com/carlmjohnson/versioninfo"
 	"github.com/did-method-plc/go-didplc/didplc"
+	"github.com/rs/cors"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
@@ -66,7 +67,7 @@ func (s *Server) Run(ctx context.Context) error {
 	mux.HandleFunc("GET /{did}", s.handleDIDDoc)
 	mux.HandleFunc("GET /{$}", s.handleIndex)
 
-	handler := otelhttp.NewHandler(mux, "")
+	handler := cors.AllowAll().Handler(otelhttp.NewHandler(mux, ""))
 
 	srv := &http.Server{Addr: s.addr, Handler: handler}
 	go func() {
