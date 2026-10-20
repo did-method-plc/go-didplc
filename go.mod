@@ -2,7 +2,7 @@ module github.com/did-method-plc/go-didplc
 
 go 1.26.0
 
-toolchain go1.26.1
+toolchain go1.26.10
 
 require (
 	github.com/bluesky-social/indigo v0.0.0-20261008172615-402ebae3bcb6
