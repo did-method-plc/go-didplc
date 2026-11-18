@@ -16,7 +16,7 @@ These lists do *not* presently include operations/DIDs containing duplicate rota
               '-------<------------------<----'
 ```
 
-(all within 72h)
+(op2 follows op1 by more than 72h, ops3–7 all within 72h of op2)
 
 After operation 6, only op 4 would be nullified. After operation 7, all operations 2-6 will be nullified.
 
